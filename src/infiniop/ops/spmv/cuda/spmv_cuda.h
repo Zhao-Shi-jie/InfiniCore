@@ -1,11 +1,11 @@
-#ifndef __SPMV_CPU_H__
-#define __SPMV_CPU_H__
+#ifndef __SPMV_CUDA_H__
+#define __SPMV_CUDA_H__
 
 #include "../../../../../include/infiniop.h"
 
-namespace op::spmv::cpu {
+namespace op::spmv::cuda {
 
-// CPU版本的CSR格式SpMV实现
+// CUDA版本的CSR格式SpMV实现
 infiniStatus_t spmv_csr(
     infiniopHandle_t handle,
     void *y,
@@ -19,6 +19,6 @@ infiniStatus_t spmv_csr(
     infiniDtype_t dtype,
     void *stream);
 
-} // namespace op::spmv::cpu
+} // namespace op::spmv::cuda
 
-#endif // __SPMV_CPU_H__
+#endif // __SPMV_CUDA_H__

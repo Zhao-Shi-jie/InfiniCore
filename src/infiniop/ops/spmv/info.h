@@ -3,93 +3,29 @@
 
 #include "../../../utils.h"
 #include "../../operator.h"
-#include "../../tensor.h"
 
 namespace op::spmv {
 
-enum class SparseFormat {
-    CSR = 0,
-    COO = 1
-};
+// 验证SpMV CSR操作的参数是否合法
+inline infiniStatus_t validateSpMVCSR(
+    const void *y, const void *x, const void *values,
+    const void *row_indices, const void *col_indices,
+    size_t num_rows, size_t num_cols, size_t nnz,
+    infiniDtype_t dtype) {
 
-struct SpMVInfo {
-    size_t num_rows;     // Number of rows in the matrix
-    size_t num_cols;     // Number of columns in the matrix
-    size_t nnz;          // Number of non-zero elements
-    SparseFormat format; // Format of the sparse matrix
-    infiniDtype_t dtype; // Data type of the values
+    // 检查指针是否为空
+    CHECK_OR_RETURN(y && x && values && row_indices && col_indices,
+                    INFINI_STATUS_BAD_PARAM);
 
-    static utils::Result<SpMVInfo> create(
-        infiniopTensorDescriptor_t y_desc,
-        infiniopTensorDescriptor_t x_desc,
-        infiniopTensorDescriptor_t values_desc,
-        infiniopTensorDescriptor_t row_indices_desc,
-        infiniopTensorDescriptor_t col_indices_desc,
-        SparseFormat format) {
+    // 检查数据类型是否支持
+    CHECK_OR_RETURN(dtype == INFINI_DTYPE_F32 || dtype == INFINI_DTYPE_F64 || dtype == INFINI_DTYPE_F16, INFINI_STATUS_BAD_TENSOR_DTYPE);
 
-        SpMVInfo info;
+    // 检查矩阵维度
+    CHECK_OR_RETURN(num_rows > 0 && num_cols > 0 && nnz > 0,
+                    INFINI_STATUS_BAD_PARAM);
 
-        // Check that the data types are compatible
-        auto dtype_values = values_desc->dtype();
-        auto dtype_x = x_desc->dtype();
-        auto dtype_y = y_desc->dtype();
-
-        if (dtype_values != dtype_x || dtype_values != dtype_y) {
-            return INFINI_STATUS_BAD_TENSOR_DTYPE;
-        }
-        info.dtype = dtype_values;
-
-        // Check that the shapes are valid
-        auto y_shape = y_desc->shape();
-        auto x_shape = x_desc->shape();
-        auto values_shape = values_desc->shape();
-        auto row_indices_shape = row_indices_desc->shape();
-        auto col_indices_shape = col_indices_desc->shape();
-
-        // Verify that values, row_indices, and col_indices have the same number of elements
-        if (format == SparseFormat::CSR) {
-            // For CSR, row_indices should have num_rows + 1 elements
-            if (row_indices_shape.size() != 1) {
-                return INFINI_STATUS_BAD_TENSOR_SHAPE;
-            }
-            info.num_rows = row_indices_shape[0] - 1;
-
-            if (y_shape.size() != 1 || y_shape[0] != info.num_rows) {
-                return INFINI_STATUS_BAD_TENSOR_SHAPE;
-            }
-        } else if (format == SparseFormat::COO) {
-            // For COO, row_indices should have nnz elements
-            if (values_shape.size() != 1 || row_indices_shape.size() != 1 || col_indices_shape.size() != 1 || values_shape[0] != row_indices_shape[0] || values_shape[0] != col_indices_shape[0]) {
-                return INFINI_STATUS_BAD_TENSOR_SHAPE;
-            }
-            info.nnz = values_shape[0];
-
-            // For COO format, we need to determine num_rows from y_shape
-            if (y_shape.size() != 1) {
-                return INFINI_STATUS_BAD_TENSOR_SHAPE;
-            }
-            info.num_rows = y_shape[0];
-        } else {
-            return INFINI_STATUS_BAD_PARAM;
-        }
-
-        // X shape should be 1D
-        if (x_shape.size() != 1) {
-            return INFINI_STATUS_BAD_TENSOR_SHAPE;
-        }
-        info.num_cols = x_shape[0];
-
-        // Check that the integer types for indices are correct (int32)
-        if (row_indices_desc->dtype() != INFINI_DTYPE_INT32 || col_indices_desc->dtype() != INFINI_DTYPE_INT32) {
-            return INFINI_STATUS_BAD_TENSOR_DTYPE;
-        }
-
-        // Set format
-        info.format = format;
-
-        return utils::Result<SpMVInfo>(info);
-    }
-};
+    return INFINI_STATUS_SUCCESS;
+}
 
 } // namespace op::spmv
 
