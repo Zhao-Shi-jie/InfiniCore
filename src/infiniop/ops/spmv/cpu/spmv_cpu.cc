@@ -1,17 +1,46 @@
 #include "spmv_cpu.h"
+#include "../../../devices/cpu/common_cpu.h"
 #include "../info.h"
 #include <cstring>
 
-#ifdef ENABLE_OMP
-#include <omp.h>
-#endif
-
 namespace op::spmv::cpu {
 
-// CSR格式的SpMV实现模板
-template <typename T>
+struct Descriptor::Opaque {
+    // CPU doesn't need special hardware context
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    size_t num_cols,
+    size_t num_rows,
+    size_t nnz,
+    infiniDtype_t dtype) {
+
+    auto handle = reinterpret_cast<device::cpu::Handle *>(handle_);
+
+    // 当前仅支持单精度
+    if (dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    auto result = SpMVInfo::create(num_cols, num_rows, nnz);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        dtype, result.take(),
+        new Opaque{},
+        handle->device, handle->device_id);
+    return INFINI_STATUS_SUCCESS;
+}
+
+// CSR格式的SpMV实现 - 仅支持float
 static void spmv_csr_impl(
-    T *y, const T *x, const T *values,
+    float *y, const float *x, const float *values,
     const int32_t *row_ptr, const int32_t *col_idx,
     size_t num_rows) {
 
@@ -19,7 +48,7 @@ static void spmv_csr_impl(
 #pragma omp parallel for
 #endif
     for (size_t i = 0; i < num_rows; ++i) {
-        T sum = 0;
+        float sum = 0;
         for (int32_t j = row_ptr[i]; j < row_ptr[i + 1]; ++j) {
             sum += values[j] * x[col_idx[j]];
         }
@@ -27,50 +56,27 @@ static void spmv_csr_impl(
     }
 }
 
-infiniStatus_t spmv_csr(
-    infiniopHandle_t handle,
+infiniStatus_t Descriptor::calculate(
     void *y,
     const void *x,
     const void *values,
-    const void *row_indices,
+    const void *row_ptr,
     const void *col_indices,
-    size_t num_rows,
-    size_t num_cols,
-    size_t nnz,
-    infiniDtype_t dtype,
-    void *stream) {
+    void *stream) const {
 
     // 参数验证
     auto validation_result = validateSpMVCSR(
-        y, x, values, row_indices, col_indices,
-        num_rows, num_cols, nnz, dtype);
+        y, x, values, row_ptr, col_indices, _dtype);
     CHECK_OR_RETURN(validation_result == INFINI_STATUS_SUCCESS, validation_result);
 
-    // 根据数据类型选择对应的实现
-    switch (dtype) {
-    case INFINI_DTYPE_F32:
-        spmv_csr_impl(
-            static_cast<float *>(y),
-            static_cast<const float *>(x),
-            static_cast<const float *>(values),
-            static_cast<const int32_t *>(row_indices),
-            static_cast<const int32_t *>(col_indices),
-            num_rows);
-        break;
-
-    case INFINI_DTYPE_F64:
-        spmv_csr_impl(
-            static_cast<double *>(y),
-            static_cast<const double *>(x),
-            static_cast<const double *>(values),
-            static_cast<const int32_t *>(row_indices),
-            static_cast<const int32_t *>(col_indices),
-            num_rows);
-        break;
-
-    default:
-        return INFINI_STATUS_BAD_TENSOR_DTYPE;
-    }
+    // 仅支持单精度
+    spmv_csr_impl(
+        static_cast<float *>(y),
+        static_cast<const float *>(x),
+        static_cast<const float *>(values),
+        static_cast<const int32_t *>(row_ptr),
+        static_cast<const int32_t *>(col_indices),
+        _info.num_rows);
 
     return INFINI_STATUS_SUCCESS;
 }

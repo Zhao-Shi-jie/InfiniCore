@@ -1,52 +1,120 @@
-// #include "../../../infiniop.h"
-// #include "info.h"
-// #include "../../operator.h"
 #include "../../handle.h"
 #include "infiniop/ops/spmv.h"
-// 包含各设备的实现头文件
+#include "spmv.h"
+
 #ifdef ENABLE_CPU_API
 #include "cpu/spmv_cpu.h"
 #endif
 
 #ifdef ENABLE_CUDA_API
-#include "cuda/spmv_cuda.h"
+#include "cuda/spmv_cuda.cuh"
 #endif
 
-__C infiniStatus_t infiniopSpMV_csr(
+__C infiniStatus_t infiniopCreateSpMVDescriptor(
     infiniopHandle_t handle,
-    void *y,
-    const void *x,
-    const void *values,
-    const void *row_indices,
-    const void *col_indices,
-    size_t num_rows,
+    infiniopSpMVDescriptor_t *desc_ptr,
     size_t num_cols,
+    size_t num_rows,
     size_t nnz,
-    infiniDtype_t dtype,
-    void *stream) {
+    infiniDtype_t dtype) {
 
-#define SPMV_CSR(CASE, NAMESPACE)                           \
-    case CASE:                                              \
-        return op::spmv::NAMESPACE::spmv_csr(               \
-            handle, y, x, values, row_indices, col_indices, \
-            num_rows, num_cols, nnz, dtype, stream)
+#define CREATE(CASE, NAMESPACE)                                             \
+    case CASE:                                                              \
+        return op::spmv::NAMESPACE::Descriptor::create(                     \
+            handle,                                                         \
+            reinterpret_cast<op::spmv::NAMESPACE::Descriptor **>(desc_ptr), \
+            num_cols, num_rows, nnz, dtype)
 
     switch (handle->device) {
 
 #ifdef ENABLE_CPU_API
-        SPMV_CSR(INFINI_DEVICE_CPU, cpu);
+        CREATE(INFINI_DEVICE_CPU, cpu);
 #endif
 #ifdef ENABLE_CUDA_API
-        SPMV_CSR(INFINI_DEVICE_NVIDIA, cuda);
-        // SPMV_CSR(INFINI_DEVICE_MOORE, cuda);
-        // SPMV_CSR(INFINI_DEVICE_ILUVATAR, cuda);
-        // SPMV_CSR(INFINI_DEVICE_METAX, cuda);
-        // SPMV_CSR(INFINI_DEVICE_SUGON, cuda);
+        CREATE(INFINI_DEVICE_NVIDIA, cuda);
 #endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
 
-#undef SPMV_CSR
+#undef CREATE
 }
+
+__C infiniStatus_t infiniopSpMV(
+    infiniopSpMVDescriptor_t desc,
+    void *y,
+    const void *x,
+    const void *values,
+    const void *row_indices,
+    const void *col_indices,
+    void *stream) {
+
+#define CALCULATE(CASE, NAMESPACE)                                             \
+    case CASE:                                                                 \
+        return reinterpret_cast<const op::spmv::NAMESPACE::Descriptor *>(desc) \
+            ->calculate(y, x, values, row_indices, col_indices, stream)
+
+    switch (desc->device_type) {
+
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_CUDA_API
+        CALCULATE(INFINI_DEVICE_NVIDIA, cuda);
+#endif
+
+    default:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    }
+
+#undef CALCULATE
+}
+
+__C infiniStatus_t infiniopDestroySpMVDescriptor(infiniopSpMVDescriptor_t desc) {
+
+#define DELETE(CASE, NAMESPACE)                                                 \
+    case CASE:                                                                  \
+        delete reinterpret_cast<const op::spmv::NAMESPACE::Descriptor *>(desc); \
+        return INFINI_STATUS_SUCCESS;
+
+    switch (desc->device_type) {
+
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_CUDA_API
+        DELETE(INFINI_DEVICE_NVIDIA, cuda);
+#endif
+
+    default:
+        return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+    }
+
+#undef DELETE
+}
+
+// 简化的直接API实现
+// __C infiniStatus_t infiniopSpMV_csr(
+//     infiniopHandle_t handle,
+//     void *y,
+//     const void *x,
+//     const void *values,
+//     const void *row_indices,
+//     const void *col_indices,
+//     size_t num_cols,
+//     infiniDtype_t dtype,
+//     void *stream) {
+
+//     // 使用描述符API实现
+//     infiniopSpMVDescriptor_t desc;
+//     auto status = infiniopCreateSpMVDescriptor(handle, &desc, num_cols, row_indices, dtype);
+//     if (status != INFINI_STATUS_SUCCESS) {
+//         return status;
+//     }
+
+//     status = infiniopSpMV(desc, y, x, values, row_indices, col_indices, stream);
+//     infiniopDestroySpMVDescriptor(desc);
+
+//     return status;
+// }

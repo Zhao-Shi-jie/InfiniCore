@@ -1,57 +1,126 @@
-from ctypes import POINTER, Structure, c_int32, c_void_p, c_uint64, c_bool, c_int
+import torch
 import ctypes
-import sys
-import os
-import time
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from operatorspy import (
-    open_lib,
-    to_tensor,
-    DeviceEnum,
+from ctypes import POINTER, Structure, c_int32, c_size_t, c_void_p, c_float
+from libinfiniop import (
     infiniopHandle_t,
     infiniopTensorDescriptor_t,
-    create_handle,
-    destroy_handle,
+    open_lib,
+    to_tensor,
+    get_test_devices,
     check_error,
-    rearrange_tensor
+    test_operator,
+    get_args,
+    debug,
+    get_tolerance,
+    profile_operation,
 )
 
-from operatorspy.tests.test_utils import get_args
-import torch
-from typing import Tuple
-import numpy as np
+# ==============================================================================
+#  Configuration (Internal Use Only)
+# ==============================================================================
+# These are not meant to be imported from other modules
+_TEST_CASES = [
+    # num_rows, num_cols, density
+    (1000, 1000, 0.01),  # Small sparse matrix
+    (500, 800, 0.02),    # Non-square matrix
+    (2048, 2048, 0.005), # Larger matrix, very sparse
+    (100, 200, 0.1),     # Dense small matrix
+    (1500, 1200, 0.015), # Medium size
+]
 
-# For CSR format:
-# row_indices = row pointers
-# values = non-zero values
-# col_indices = column indices
+# Data types used for testing (currently only float32 supported)
+_TENSOR_DTYPES = [torch.float32]
+
+# Tolerance map for different data types
+_TOLERANCE_MAP = {
+    torch.float32: {"atol": 1e-5, "rtol": 1e-4},
+}
+
+DEBUG = False
+PROFILE = False
+NUM_PRERUN = 10
+NUM_ITERATIONS = 100
+
+# ==============================================================================
+#  Definitions
+# ==============================================================================
 class SpMVDescriptor(Structure):
     _fields_ = [("device", c_int32)]
 
 infiniopSpMVDescriptor_t = POINTER(SpMVDescriptor)
 
-def spmv_reference(values, row_indices, col_indices, x, sparse_format=0):
+def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     """
-    Compute the SpMV reference result on the CPU.
-    sparse_format: 0 for CSR, 1 for COO
+    Create a random CSR sparse matrix with given density.
+    Returns: values, row_ptr, col_indices, nnz
     """
-    if sparse_format == 0:  # CSR
-        num_rows = len(row_indices) - 1
-        y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
-        
-        for i in range(num_rows):
-            for j in range(row_indices[i], row_indices[i + 1]):
-                y[i] += values[j] * x[col_indices[j]]
-    else:  # COO
-        num_rows = int(row_indices.max().item()) + 1
-        y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
-        
-        for i in range(len(values)):
-            y[row_indices[i]] += values[i] * x[col_indices[i]]
+    # Generate random sparse matrix
+    total_elements = num_rows * num_cols
+    nnz = int(total_elements * density)
+    
+    # Generate random indices and sort them to avoid duplicates
+    linear_indices = torch.randperm(total_elements)[:nnz]
+    rows = linear_indices // num_cols
+    cols = linear_indices % num_cols
+    
+    # Sort by row for CSR format
+    sorted_indices = torch.argsort(rows * num_cols + cols)
+    rows = rows[sorted_indices]
+    cols = cols[sorted_indices]
+    
+    # Create values
+    values = torch.rand(nnz, dtype=dtype, device=device)
+    
+    # Create row pointers (CSR format)
+    row_ptr = torch.zeros(num_rows + 1, dtype=torch.int32, device=device)
+    for i in range(nnz):
+        row_ptr[rows[i] + 1] += 1
+    row_ptr = torch.cumsum(row_ptr, dim=0)
+    
+    # Column indices
+    col_indices = cols.to(torch.int32).to(device)
+    
+    return values, row_ptr, col_indices, nnz
+
+def spmv_reference(values, row_ptr, col_indices, x):
+    """
+    Reference SpMV implementation using PyTorch.
+    """
+    num_rows = len(row_ptr) - 1
+    y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
+    
+    for i in range(num_rows):
+        start = row_ptr[i].item()
+        end = row_ptr[i + 1].item()
+        for j in range(start, end):
+            y[i] += values[j] * x[col_indices[j]]
     
     return y
 
+def spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols):
+    """
+    Alternative reference using PyTorch sparse tensors for verification.
+    """
+    # Convert CSR to COO format for PyTorch sparse tensor
+    row_indices = []
+    for i in range(num_rows):
+        start = row_ptr[i].item()
+        end = row_ptr[i + 1].item()
+        row_indices.extend([i] * (end - start))
+    
+    row_indices = torch.tensor(row_indices, dtype=torch.long, device=values.device)
+    col_indices_long = col_indices.long()
+    
+    # Create sparse tensor
+    indices = torch.stack([row_indices, col_indices_long])
+    sparse_matrix = torch.sparse_coo_tensor(
+        indices, values, (num_rows, num_cols), device=values.device
+    ).coalesce()
+    
+    # Perform SpMV
+    return torch.sparse.mm(sparse_matrix, x.unsqueeze(1)).squeeze(1)
+
+# The argument list should be (lib, handle, torch_device, <param list>, dtype)
 def test(
     lib,
     handle,
@@ -59,223 +128,151 @@ def test(
     num_rows,
     num_cols,
     density,
-    sparse_format=0,  # 0 for CSR, 1 for COO
     dtype=torch.float32,
     sync=None
 ):
     print(
-        f"Testing SpMV on {torch_device} with num_rows:{num_rows} num_cols:{num_cols} "
-        f"density:{density} sparse_format:{sparse_format} dtype:{dtype}"
+        f"Testing SpMV on {torch_device} with num_rows:{num_rows}, num_cols:{num_cols}, "
+        f"density:{density}, dtype:{dtype}"
+    )
+
+    # Create random CSR sparse matrix
+    values, row_ptr, col_indices, nnz = create_random_csr_matrix(
+        num_rows, num_cols, density, dtype, torch_device
     )
     
-    # Create random sparse matrix in CSR/COO format
-    nnz = int(num_rows * num_cols * density)
-    
-    if sparse_format == 0:  # CSR format
-        # Create random CSR matrix
-        indices = torch.randint(0, num_rows * num_cols, (nnz,))
-        unique_indices = torch.unique(indices)
-        nnz_actual = len(unique_indices)
-        
-        # Convert linear indices to row, col
-        rows = unique_indices // num_cols
-        cols = unique_indices % num_cols
-        
-        # Sort by row then by column for CSR
-        sorted_indices = torch.argsort(rows * num_cols + cols)
-        rows = rows[sorted_indices]
-        cols = cols[sorted_indices]
-        
-        # Create values
-        values = torch.rand(nnz_actual, dtype=dtype).to(torch_device)
-        if dtype == torch.float16:
-            values = (values * 10).to(dtype)  # Scale for better numerical stability
-        else:
-            values = values.to(dtype)
-        
-        # Create row pointers
-        row_indices = torch.zeros(num_rows + 1, dtype=torch.int32).to(torch_device)
-        for r in rows:
-            row_indices[r + 1] += 1
-        row_indices = torch.cumsum(row_indices, dim=0).to(torch.int32)
-        
-        # Column indices
-        col_indices = cols.to(torch.int32).to(torch_device)
-        
-    else:  # COO format
-        # Random row and column indices
-        row_indices = torch.randint(0, num_rows, (nnz,), dtype=torch.int32).to(torch_device)
-        col_indices = torch.randint(0, num_cols, (nnz,), dtype=torch.int32).to(torch_device)
-        values = torch.rand(nnz, dtype=dtype).to(torch_device)
-        if dtype == torch.float16:
-            values = (values * 10).to(dtype)
-        else:
-            values = values.to(dtype)
-    
     # Create input vector
-    x = torch.rand(num_cols, dtype=dtype).to(torch_device)
-    if dtype == torch.float16:
-        x = (x * 10).to(dtype)
-    else:
-        x = x.to(dtype)
-    
-    # Compute reference result
-    with torch.no_grad():
-        y_ref = spmv_reference(values, row_indices, col_indices, x, sparse_format)
+    x = torch.rand(num_cols, dtype=dtype, device=torch_device)
     
     # Create output vector
-    y = torch.zeros(num_rows, dtype=dtype).to(torch_device)
+    y = torch.zeros(num_rows, dtype=dtype, device=torch_device)
+
+    # Compute reference results
+    y_ref = spmv_reference(values, row_ptr, col_indices, x)
+    y_pytorch_ref = spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols)
     
-    # Create tensors
+    # Verify our reference implementations agree
+    assert torch.allclose(y_ref, y_pytorch_ref, atol=1e-6, rtol=1e-5), \
+        "Reference implementations don't match!"
+
+    # Create tensors for infiniop
     y_tensor = to_tensor(y, lib)
     x_tensor = to_tensor(x, lib)
     values_tensor = to_tensor(values, lib)
-    row_indices_tensor = to_tensor(row_indices, lib)
+    row_ptr_tensor = to_tensor(row_ptr, lib)
     col_indices_tensor = to_tensor(col_indices, lib)
-    
+
     if sync is not None:
         sync()
-    
+
     # Create descriptor
     descriptor = infiniopSpMVDescriptor_t()
     check_error(
         lib.infiniopCreateSpMVDescriptor(
             handle,
             ctypes.byref(descriptor),
-            y_tensor.descriptor,
-            x_tensor.descriptor,
-            values_tensor.descriptor,
-            row_indices_tensor.descriptor,
-            col_indices_tensor.descriptor,
-            c_int(sparse_format)
+            num_cols,
+            num_rows,
+            nnz,
+            0  # INFINI_DTYPE_F32
         )
     )
-    
-    # Invalidate descriptors to ensure kernel uses proper values
-    y_tensor.descriptor.contents.invalidate()
-    x_tensor.descriptor.contents.invalidate()
-    values_tensor.descriptor.contents.invalidate()
-    row_indices_tensor.descriptor.contents.invalidate()
-    col_indices_tensor.descriptor.contents.invalidate()
-    
-    # Get workspace size
-    workspace_size = c_uint64(0)
-    check_error(
-        lib.infiniopGetSpMVWorkspaceSize(descriptor, ctypes.byref(workspace_size))
-    )
-    
-    # Create workspace
-    if workspace_size.value > 0:
-        workspace = torch.zeros(int(workspace_size.value), dtype=torch.uint8).to(torch_device)
-        workspace_ptr = workspace.data_ptr()
-    else:
-        workspace_ptr = None
-    
-    # Execute SpMV
-    check_error(
-        lib.infiniopSpMV(
-            descriptor,
-            workspace_ptr,
-            workspace_size.value,
-            y_tensor.data,
-            x_tensor.data,
-            values_tensor.data,
-            row_indices_tensor.data,
-            col_indices_tensor.data,
-            None
+
+    # Invalidate the descriptors to prevent them from being directly used by the kernel
+    for tensor in [y_tensor, x_tensor, values_tensor, row_ptr_tensor, col_indices_tensor]:
+        tensor.destroyDesc(lib)
+
+    # Execute infiniop SpMV operator
+    def lib_spmv():
+        check_error(
+            lib.infiniopSpMV(
+                descriptor,
+                y_tensor.data,
+                x_tensor.data,
+                values_tensor.data,
+                row_ptr_tensor.data,
+                col_indices_tensor.data,
+                None,  # stream
+            )
         )
-    )
+
+    lib_spmv()
+
+    # Validate results
+    atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
+    if DEBUG:
+        debug(y, y_ref, atol=atol, rtol=rtol)
     
-    # Check results
-    rtol = 1e-3 if dtype == torch.float16 else 1e-5
-    atol = 1e-3 if dtype == torch.float16 else 1e-5
-    assert torch.allclose(y, y_ref, rtol=rtol, atol=atol), \
-           f"Results don't match! Max diff: {(y - y_ref).abs().max().item()}"
+    # Check against our reference
+    assert torch.allclose(y, y_ref, atol=atol, rtol=rtol), \
+        f"Results don't match reference! Max diff: {(y - y_ref).abs().max().item()}"
     
-    # Destroy descriptor
+    # Also check against PyTorch sparse reference
+    assert torch.allclose(y, y_pytorch_ref, atol=atol, rtol=rtol), \
+        f"Results don't match PyTorch reference! Max diff: {(y - y_pytorch_ref).abs().max().item()}"
+
+    # Profiling workflow
+    if PROFILE:
+        profile_operation(
+            "Reference", 
+            lambda: spmv_reference(values, row_ptr, col_indices, x), 
+            torch_device, NUM_PRERUN, NUM_ITERATIONS
+        )
+        profile_operation(
+            "PyTorch", 
+            lambda: spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols),
+            torch_device, NUM_PRERUN, NUM_ITERATIONS
+        )
+        profile_operation(
+            "    lib", 
+            lambda: lib_spmv(), 
+            torch_device, NUM_PRERUN, NUM_ITERATIONS
+        )
+    
     check_error(lib.infiniopDestroySpMVDescriptor(descriptor))
-    
-    print("Test passed!")
 
-
-def test_cpu(lib, test_cases):
-    device = DeviceEnum.DEVICE_CPU
-    handle = create_handle(lib, device)
-    
-    for num_rows, num_cols, density, sparse_format, dtype in test_cases:
-        test(lib, handle, "cpu", num_rows, num_cols, density, sparse_format, dtype)
-    
-    destroy_handle(lib, handle)
-
-
-def test_cuda(lib, test_cases):
-    if not torch.cuda.is_available():
-        print("CUDA not available, skipping test")
-        return
-        
-    device = DeviceEnum.DEVICE_CUDA
-    handle = create_handle(lib, device)
-    
-    for num_rows, num_cols, density, sparse_format, dtype in test_cases:
-        test(lib, handle, "cuda", num_rows, num_cols, density, sparse_format, dtype)
-    
-    destroy_handle(lib, handle)
-
-
+# ==============================================================================
+#  Main Execution
+# ==============================================================================
 if __name__ == "__main__":
-    test_cases = [
-        # num_rows, num_cols, density, sparse_format, dtype
-        (1000, 1000, 0.01, 0, torch.float32),  # CSR, float32
-        (500, 800, 0.02, 0, torch.float16),    # CSR, float16
-        (800, 500, 0.01, 1, torch.float32),    # COO, float32
-        (400, 600, 0.02, 1, torch.float16),    # COO, float16
-    ]
-    
     args = get_args()
     lib = open_lib()
-    
+
     # Register API functions
     lib.infiniopCreateSpMVDescriptor.restype = c_int32
     lib.infiniopCreateSpMVDescriptor.argtypes = [
         infiniopHandle_t,
         POINTER(infiniopSpMVDescriptor_t),
-        infiniopTensorDescriptor_t,
-        infiniopTensorDescriptor_t,
-        infiniopTensorDescriptor_t,
-        infiniopTensorDescriptor_t,
-        infiniopTensorDescriptor_t,
-        c_int
+        c_size_t,  # num_cols
+        c_size_t,  # num_rows  
+        c_size_t,  # nnz
+        c_int32,   # dtype
     ]
-    
-    lib.infiniopGetSpMVWorkspaceSize.restype = c_int32
-    lib.infiniopGetSpMVWorkspaceSize.argtypes = [
-        infiniopSpMVDescriptor_t,
-        POINTER(c_uint64)
-    ]
-    
+
     lib.infiniopSpMV.restype = c_int32
     lib.infiniopSpMV.argtypes = [
         infiniopSpMVDescriptor_t,
-        c_void_p,
-        c_uint64,
-        c_void_p,
-        c_void_p,
-        c_void_p,
-        c_void_p,
-        c_void_p,
-        c_void_p
+        c_void_p,  # y
+        c_void_p,  # x
+        c_void_p,  # values
+        c_void_p,  # row_ptr
+        c_void_p,  # col_indices
+        c_void_p,  # stream
     ]
-    
+
     lib.infiniopDestroySpMVDescriptor.restype = c_int32
     lib.infiniopDestroySpMVDescriptor.argtypes = [
-        infiniopSpMVDescriptor_t
+        infiniopSpMVDescriptor_t,
     ]
-    
-    if args.cpu:
-        test_cpu(lib, test_cases)
-    if args.cuda:
-        test_cuda(lib, test_cases)
-    if not (args.cpu or args.cuda or args.bang):
-        test_cpu(lib, test_cases)
-    
-    print("\033[92mAll tests passed!\033[0m")
+
+    # Configure testing options
+    DEBUG = args.debug
+    PROFILE = args.profile
+    NUM_PRERUN = args.num_prerun
+    NUM_ITERATIONS = args.num_iterations
+
+    # Execute tests
+    for device in get_test_devices(args):
+        test_operator(lib, device, test, _TEST_CASES, _TENSOR_DTYPES)
+
+    print("\033[92mTest passed!\033[0m")
