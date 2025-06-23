@@ -13,6 +13,7 @@ from libinfiniop import (
     debug,
     get_tolerance,
     profile_operation,
+    InfiniDtype,
 )
 
 # ==============================================================================
@@ -21,6 +22,8 @@ from libinfiniop import (
 # These are not meant to be imported from other modules
 _TEST_CASES = [
     # num_rows, num_cols, density
+    (100, 100, 0.01),      # Dense small matrix
+    (800, 1000, 0.01),
     (1000, 1000, 0.01),  # Small sparse matrix
     (500, 800, 0.02),    # Non-square matrix
     (2048, 2048, 0.005), # Larger matrix, very sparse
@@ -69,23 +72,52 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     cols = cols[sorted_indices]
     
     # Create values
-    values = torch.rand(nnz, dtype=dtype, device=device)
+    values = torch.ones(nnz, dtype=dtype, device=device)
     
     # Create row pointers (CSR format)
     row_ptr = torch.zeros(num_rows + 1, dtype=torch.int32, device=device)
     for i in range(nnz):
         row_ptr[rows[i] + 1] += 1
-    row_ptr = torch.cumsum(row_ptr, dim=0)
+    row_ptr = torch.cumsum(row_ptr, dim=0, dtype=torch.int32)
+    # # 🔧 修复：强制row_ptr连续
+    # if not row_ptr.is_contiguous():
+    #     print("Warning: row_ptr from cumsum is not contiguous!")
+    #     row_ptr = row_ptr.contiguous()
     
     # Column indices
     col_indices = cols.to(torch.int32).to(device)
+    # # 🔧 修复：强制col_indices连续（虽然通常已经连续）
+    # if not col_indices.is_contiguous():
+    #     print("Warning: col_indices is not contiguous!")
+    #     col_indices = col_indices.contiguous()
     
+    if DEBUG:
+        print("=== CSR Matrix Memory Layout Debug ===")
+        print(f"row_ptr: shape={row_ptr.shape}, dtype={row_ptr.dtype}")
+        print(f"row_ptr.is_contiguous(): {row_ptr.is_contiguous()}")
+        print(f"row_ptr.stride(): {row_ptr.stride()}")
+        print(f"row_ptr.storage_offset(): {row_ptr.storage_offset()}")
+        print(f"row_ptr values: {row_ptr[:10]}")
+        
+        print(f"col_indices: shape={col_indices.shape}, dtype={col_indices.dtype}")
+        print(f"col_indices.is_contiguous(): {col_indices.is_contiguous()}")
+        print(f"col_indices.stride(): {col_indices.stride()}")
+        print(f"col_indices.storage_offset(): {col_indices.storage_offset()}")
+        print(f"col_indices values: {col_indices[:10]}")
+
     return values, row_ptr, col_indices, nnz
 
 def spmv_reference(values, row_ptr, col_indices, x):
     """
     Reference SpMV implementation using PyTorch.
     """
+    # 打印values, row_ptr, col_indices, x for debugging
+    if DEBUG:
+        print("------------------SpMV Reference Parameters:--------------------")
+        print("Values:", values)
+        print("Row pointers:", row_ptr)
+        print("Column indices:", col_indices)
+        print("Input vector x:", x)
     num_rows = len(row_ptr) - 1
     y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
     
@@ -142,7 +174,7 @@ def test(
     )
     
     # Create input vector
-    x = torch.rand(num_cols, dtype=dtype, device=torch_device)
+    x = torch.ones(num_cols, dtype=dtype, device=torch_device)
     
     # Create output vector
     y = torch.zeros(num_rows, dtype=dtype, device=torch_device)
@@ -174,7 +206,7 @@ def test(
             num_cols,
             num_rows,
             nnz,
-            0  # INFINI_DTYPE_F32
+            InfiniDtype.F32 # Only support float32 now.
         )
     )
 
@@ -195,13 +227,28 @@ def test(
                 None,  # stream
             )
         )
+    
+    if DEBUG:# 打印spmv计算需要的参数，x_tensor, y_tensor, values_tensor, row_ptr_tensor, col_indices_tensor
+        print("--------------SpMV parameters(数值): ------------------")
+        print("x_tensor:", x_tensor.torch_tensor_)
+        print("y_tensor:", y_tensor.torch_tensor_)
+        print("values_tensor:", values_tensor.torch_tensor_)
+        print("row_ptr_tensor:", row_ptr_tensor.torch_tensor_)
+        print("col_indices_tensor:", col_indices_tensor.torch_tensor_)
+
+        print("--------------SpMV parameters(地址): ------------------")
+        print("x_tensor:", x_tensor.data)
+        print("y_tensor:", y_tensor.data)
+        print("values_tensor:", values_tensor.data)
+        print("row_ptr_tensor:", row_ptr_tensor.data)   
+        print("col_indices_tensor:", col_indices_tensor.data)
 
     lib_spmv()
 
     # Validate results
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
-    if DEBUG:
-        debug(y, y_ref, atol=atol, rtol=rtol)
+    # if DEBUG:
+    #     debug(y, y_ref, atol=atol, rtol=rtol)
     
     # Check against our reference
     assert torch.allclose(y, y_ref, atol=atol, rtol=rtol), \

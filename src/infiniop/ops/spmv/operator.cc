@@ -46,14 +46,29 @@ __C infiniStatus_t infiniopSpMV(
     void *y,
     const void *x,
     const void *values,
-    const void *row_indices,
+    const void *row_ptr,
     const void *col_indices,
     void *stream) {
+
+    printf("=== C Interface Debug ===\n");
+    printf("y ptr: %p\n", y);
+    printf("x ptr: %p\n", x);
+    printf("values ptr: %p\n", values);
+    printf("row_ptr ptr: %p\n", row_ptr);
+    printf("col_indices ptr: %p\n", col_indices);
+    printf("stream ptr: %p\n", stream);
+
+    // // 尝试读取row_ptr的前几个值
+    // if (row_ptr) {
+    //     int32_t *row_ptr_int = (int32_t *)row_ptr;
+    //     printCudaArray<int>(row_ptr, 100 + 1);
+    //     printCudaArray<int>(row_ptr_int, 100 + 1);
+    // }
 
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
         return reinterpret_cast<const op::spmv::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(y, x, values, row_indices, col_indices, stream)
+            ->calculate(y, x, values, row_ptr, col_indices, stream)
 
     switch (desc->device_type) {
 
