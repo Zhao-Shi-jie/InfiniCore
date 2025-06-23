@@ -50,21 +50,6 @@ __C infiniStatus_t infiniopSpMV(
     const void *col_indices,
     void *stream) {
 
-    printf("=== C Interface Debug ===\n");
-    printf("y ptr: %p\n", y);
-    printf("x ptr: %p\n", x);
-    printf("values ptr: %p\n", values);
-    printf("row_ptr ptr: %p\n", row_ptr);
-    printf("col_indices ptr: %p\n", col_indices);
-    printf("stream ptr: %p\n", stream);
-
-    // // 尝试读取row_ptr的前几个值
-    // if (row_ptr) {
-    //     int32_t *row_ptr_int = (int32_t *)row_ptr;
-    //     printCudaArray<int>(row_ptr, 100 + 1);
-    //     printCudaArray<int>(row_ptr_int, 100 + 1);
-    // }
-
 #define CALCULATE(CASE, NAMESPACE)                                             \
     case CASE:                                                                 \
         return reinterpret_cast<const op::spmv::NAMESPACE::Descriptor *>(desc) \
@@ -108,28 +93,3 @@ __C infiniStatus_t infiniopDestroySpMVDescriptor(infiniopSpMVDescriptor_t desc) 
 
 #undef DELETE
 }
-
-// 简化的直接API实现
-// __C infiniStatus_t infiniopSpMV_csr(
-//     infiniopHandle_t handle,
-//     void *y,
-//     const void *x,
-//     const void *values,
-//     const void *row_indices,
-//     const void *col_indices,
-//     size_t num_cols,
-//     infiniDtype_t dtype,
-//     void *stream) {
-
-//     // 使用描述符API实现
-//     infiniopSpMVDescriptor_t desc;
-//     auto status = infiniopCreateSpMVDescriptor(handle, &desc, num_cols, row_indices, dtype);
-//     if (status != INFINI_STATUS_SUCCESS) {
-//         return status;
-//     }
-
-//     status = infiniopSpMV(desc, y, x, values, row_indices, col_indices, stream);
-//     infiniopDestroySpMVDescriptor(desc);
-
-//     return status;
-// }

@@ -21,14 +21,10 @@ from libinfiniop import (
 # ==============================================================================
 # These are not meant to be imported from other modules
 _TEST_CASES = [
-    # num_rows, num_cols, density
-    (100, 100, 0.01),      # Dense small matrix
-    (800, 1000, 0.01),
-    (1000, 1000, 0.01),  # Small sparse matrix
-    (500, 800, 0.02),    # Non-square matrix
-    (2048, 2048, 0.005), # Larger matrix, very sparse
-    (100, 200, 0.1),     # Dense small matrix
-    (1500, 1200, 0.015), # Medium size
+    (100, 200, 0.1),            # Dense small matrix
+    (5000, 3600, 0.01),         # Medium size
+    (10000,100000, 0.0004),    # Large sparse matrix
+    # (1000000, 1000000, 0.00001), # Very large sparse matrix
 ]
 
 # Data types used for testing (currently only float32 supported)
@@ -52,6 +48,29 @@ class SpMVDescriptor(Structure):
 
 infiniopSpMVDescriptor_t = POINTER(SpMVDescriptor)
 
+def generate_unique_indices_batch(nnz, total_elements, device, batch_size=100):
+    """
+    Generate unique random linear indices in [0, total_elements-1] with minimal extra space.
+    Uses a batch approach to avoid excessive memory usage.
+    """
+    generated = set()
+    result = torch.empty(nnz, dtype=torch.long, device=device)
+    count = 0
+    
+    while count < nnz:
+        remaining = nnz - count
+        batch_size = min(batch_size, remaining)
+        candidates = torch.randint(0, total_elements, (batch_size,), device=device)
+        for candidate in candidates.cpu().tolist():
+            if candidate not in generated:
+                generated.add(candidate)
+                result[count] = candidate
+                count += 1
+                if count == nnz:
+                    break
+    
+    return result
+
 def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     """
     Create a random CSR sparse matrix with given density.
@@ -61,8 +80,9 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     total_elements = num_rows * num_cols
     nnz = int(total_elements * density)
     
-    # Generate random indices and sort them to avoid duplicates
-    linear_indices = torch.randperm(total_elements)[:nnz]
+    # Generate linear indices for non-zero elements
+    linear_indices = generate_unique_indices_batch(nnz, total_elements, device)
+    
     rows = linear_indices // num_cols
     cols = linear_indices % num_cols
     
@@ -79,17 +99,9 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     for i in range(nnz):
         row_ptr[rows[i] + 1] += 1
     row_ptr = torch.cumsum(row_ptr, dim=0, dtype=torch.int32)
-    # # 🔧 修复：强制row_ptr连续
-    # if not row_ptr.is_contiguous():
-    #     print("Warning: row_ptr from cumsum is not contiguous!")
-    #     row_ptr = row_ptr.contiguous()
     
     # Column indices
     col_indices = cols.to(torch.int32).to(device)
-    # # 🔧 修复：强制col_indices连续（虽然通常已经连续）
-    # if not col_indices.is_contiguous():
-    #     print("Warning: col_indices is not contiguous!")
-    #     col_indices = col_indices.contiguous()
     
     if DEBUG:
         print("=== CSR Matrix Memory Layout Debug ===")
@@ -111,13 +123,6 @@ def spmv_reference(values, row_ptr, col_indices, x):
     """
     Reference SpMV implementation using PyTorch.
     """
-    # 打印values, row_ptr, col_indices, x for debugging
-    if DEBUG:
-        print("------------------SpMV Reference Parameters:--------------------")
-        print("Values:", values)
-        print("Row pointers:", row_ptr)
-        print("Column indices:", col_indices)
-        print("Input vector x:", x)
     num_rows = len(row_ptr) - 1
     y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
     
@@ -227,28 +232,22 @@ def test(
                 None,  # stream
             )
         )
-    
-    if DEBUG:# 打印spmv计算需要的参数，x_tensor, y_tensor, values_tensor, row_ptr_tensor, col_indices_tensor
-        print("--------------SpMV parameters(数值): ------------------")
+
+    # print parameters for debugging
+    if DEBUG:
+        print("--------------SpMV parameters: ------------------")
         print("x_tensor:", x_tensor.torch_tensor_)
         print("y_tensor:", y_tensor.torch_tensor_)
         print("values_tensor:", values_tensor.torch_tensor_)
         print("row_ptr_tensor:", row_ptr_tensor.torch_tensor_)
         print("col_indices_tensor:", col_indices_tensor.torch_tensor_)
 
-        print("--------------SpMV parameters(地址): ------------------")
-        print("x_tensor:", x_tensor.data)
-        print("y_tensor:", y_tensor.data)
-        print("values_tensor:", values_tensor.data)
-        print("row_ptr_tensor:", row_ptr_tensor.data)   
-        print("col_indices_tensor:", col_indices_tensor.data)
-
     lib_spmv()
 
     # Validate results
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
-    # if DEBUG:
-    #     debug(y, y_ref, atol=atol, rtol=rtol)
+    if DEBUG:
+        debug(y, y_ref, atol=atol, rtol=rtol)
     
     # Check against our reference
     assert torch.allclose(y, y_ref, atol=atol, rtol=rtol), \

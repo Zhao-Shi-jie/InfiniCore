@@ -38,7 +38,7 @@ infiniStatus_t Descriptor::create(
     return INFINI_STATUS_SUCCESS;
 }
 
-// CSR格式的SpMV实现 - 仅支持float
+// CSR Implementation of SpMV
 static void spmv_csr_impl(
     float *y, const float *x, const float *values,
     const int32_t *row_ptr, const int32_t *col_idx,
@@ -64,12 +64,10 @@ infiniStatus_t Descriptor::calculate(
     const void *col_indices,
     void *stream) const {
 
-    // 参数验证
     auto validation_result = validateSpMVCSR(
         y, x, values, row_ptr, col_indices, _dtype);
     CHECK_OR_RETURN(validation_result == INFINI_STATUS_SUCCESS, validation_result);
 
-    // 仅支持单精度
     spmv_csr_impl(
         static_cast<float *>(y),
         static_cast<const float *>(x),

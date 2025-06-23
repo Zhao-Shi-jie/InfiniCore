@@ -48,17 +48,14 @@ public:
     }
 };
 
-// 验证SpMV CSR操作的参数是否合法
+// validate SpMV CSR operation parameters
 inline infiniStatus_t validateSpMVCSR(
     const void *y, const void *x, const void *values,
     const void *row_indices, const void *col_indices,
     infiniDtype_t dtype) {
 
-    // 检查指针是否为空
     CHECK_OR_RETURN(y && x && values && row_indices && col_indices,
                     INFINI_STATUS_BAD_PARAM);
-
-    // 当前仅支持单精度
     CHECK_OR_RETURN(dtype == INFINI_DTYPE_F32, INFINI_STATUS_BAD_TENSOR_DTYPE);
 
     return INFINI_STATUS_SUCCESS;

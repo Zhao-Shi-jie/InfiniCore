@@ -4,7 +4,6 @@
 #include "cuda_handle.cuh"
 #include "infinicore.h"
 #include <cuda_runtime.h>
-#include <cusparse.h>
 
 namespace device::cuda {
 
