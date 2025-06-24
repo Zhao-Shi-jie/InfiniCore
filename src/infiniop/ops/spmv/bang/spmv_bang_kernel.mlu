@@ -1,0 +1,49 @@
+#include "mlu.h"
+#include <cstdio>
+extern "C" __mlu_entry__ void spmv_csr(int num_rows, int num_cols, int nnz,
+                             int* row_ptr, int* col_indices, float* values,
+                             float* x, float* y) {
+  // 计算每个 task 处理的行范围
+  // 如果按照nnz划分任务，或许要在descriptor中记录一些信息；
+//   int rownum_pertask = (num_rows + taskDim - 1) / taskDim;
+//   int start_row = taskID * rownum_pertask;
+//   int end_row = num_rows < (taskID + 1) * rownum_pertask ? num_rows : (taskID + 1) * rownum_pertask;  
+    printf("taskId: %d\n",  taskId);
+    int low = 0;
+    int high = num_rows;
+    int nnz_per_task = nnz / taskDim;
+    printf("taskId: %d, nnz_per_task: %d\n", taskId, nnz_per_task);
+    printf("row_ptr[0]: %d\n", row_ptr[0]);
+    while (low < high) {
+        int mid = (low + high) / 2;
+        if (row_ptr[mid] < taskId * nnz_per_task) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    int start_row = low;
+    printf("taskId: %d, start_row: %d\n", taskId, start_row);
+    int end_row = num_rows;
+    if (taskId != taskDim - 1) {
+        high = num_rows;
+        while (low < high) {
+            int mid = (low + high) / 2;
+            if (row_ptr[mid] < (taskId + 1) * nnz_per_task) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        end_row = low;
+    }
+    printf("taskId: %d, end_row: %d\n", taskId, end_row);
+    // 处理分配给当前 task 的行
+    for (int row = start_row; row < end_row; row++) {
+        float sum = 0.0f;
+        for (int j = row_ptr[row]; j < row_ptr[row + 1]; j++) {
+        sum += values[j] * x[col_indices[j]];
+        }
+        y[row] = sum;
+    }
+}
