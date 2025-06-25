@@ -185,12 +185,11 @@ def test(
     y = torch.zeros(num_rows, dtype=dtype, device=torch_device)
 
     # Compute reference results
-    y_ref = spmv_reference(values, row_ptr, col_indices, x)
-    y_pytorch_ref = spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols)
-    
-    # Verify our reference implementations agree
-    assert torch.allclose(y_ref, y_pytorch_ref, atol=1e-6, rtol=1e-5), \
-        "Reference implementations don't match!"
+    y_torch_ref = spmv_reference(values, row_ptr, col_indices, x)
+    if torch_device == "cuda":
+        y_torch_sparse_ref = spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols)
+        assert torch.allclose(y_torch_ref, y_torch_sparse_ref, atol=1e-6, rtol=1e-5), \
+            "PyTorch sparse reference doesn't match common reference!"
 
     # Create tensors for infiniop
     y_tensor = to_tensor(y, lib)
@@ -236,39 +235,41 @@ def test(
     # print parameters for debugging
     if DEBUG:
         print("--------------SpMV parameters: ------------------")
-        print("x_tensor:", x_tensor.torch_tensor_)
-        print("y_tensor:", y_tensor.torch_tensor_)
-        print("values_tensor:", values_tensor.torch_tensor_)
-        print("row_ptr_tensor:", row_ptr_tensor.torch_tensor_)
-        print("col_indices_tensor:", col_indices_tensor.torch_tensor_)
+        print("x_tensor:", x_tensor.torch_tensor_[:10])
+        print("y_tensor:", y_tensor.torch_tensor_[:10])
+        print("values_tensor:", values_tensor.torch_tensor_[:10])
+        print("row_ptr_tensor:", row_ptr_tensor.torch_tensor_[:10])
+        print("col_indices_tensor:", col_indices_tensor.torch_tensor_[:10])
 
     lib_spmv()
 
     # Validate results
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
     if DEBUG:
-        debug(y, y_ref, atol=atol, rtol=rtol)
+        debug(y, y_torch_ref, atol=atol, rtol=rtol)
     
     # Check against our reference
-    assert torch.allclose(y, y_ref, atol=atol, rtol=rtol), \
-        f"Results don't match reference! Max diff: {(y - y_ref).abs().max().item()}"
+    assert torch.allclose(y, y_torch_ref, atol=atol, rtol=rtol), \
+        f"Results don't match reference! Max diff: {(y - y_torch_ref).abs().max().item()}"
     
     # Also check against PyTorch sparse reference
-    assert torch.allclose(y, y_pytorch_ref, atol=atol, rtol=rtol), \
-        f"Results don't match PyTorch reference! Max diff: {(y - y_pytorch_ref).abs().max().item()}"
+    if torch_device == "cuda":
+        assert torch.allclose(y, y_torch_sparse_ref, atol=atol, rtol=rtol), \
+            f"Results don't match PyTorch reference! Max diff: {(y - y_torch_sparse_ref).abs().max().item()}"
 
     # Profiling workflow
     if PROFILE:
         profile_operation(
-            "Reference", 
+            "Torch Reference", 
             lambda: spmv_reference(values, row_ptr, col_indices, x), 
             torch_device, NUM_PRERUN, NUM_ITERATIONS
         )
-        profile_operation(
-            "PyTorch", 
-            lambda: spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols),
-            torch_device, NUM_PRERUN, NUM_ITERATIONS
-        )
+        if torch_device == "cuda":
+            profile_operation(
+                "Torch Sparse Reference", 
+                lambda: spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols),
+                torch_device, NUM_PRERUN, NUM_ITERATIONS
+            )
         profile_operation(
             "    lib", 
             lambda: lib_spmv(), 
