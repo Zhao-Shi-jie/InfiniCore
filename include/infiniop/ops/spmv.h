@@ -19,7 +19,7 @@ __C __export infiniStatus_t infiniopSpMV(
     void *y,                 // 输出向量
     const void *x,           // 输入向量
     const void *values,      // 非零元素值数组
-    const void *row_indices, // 行偏移数组
+    const void *row_ptr,     // 行偏移数组
     const void *col_indices, // 列索引数组
     void *stream);           // 计算流
 

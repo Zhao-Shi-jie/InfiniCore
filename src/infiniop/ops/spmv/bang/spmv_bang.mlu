@@ -1,14 +1,12 @@
+#include "spmv_bang.h"
+#include <bang_device_types.h>
 #include "../../../devices/bang/bang_handle.h"
 #include "../../../devices/bang/common_bang.h"
 #include "../info.h"
-#include "bang.h"
-#include "mlu.h"
-#include "spmv_bang.h"
-#include <bang_device_types.h>
 #include <cstddef>
 #include <cstdio>
-#include <iostream>
-#include <vector>
+#include "bang.h"
+#include "mlu.h"
 
 #define NRAMSIZE 1024 * 512 // 512KB NRAM size
 
