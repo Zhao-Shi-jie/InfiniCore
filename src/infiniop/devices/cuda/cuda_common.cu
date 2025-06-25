@@ -3,12 +3,9 @@
 namespace device::cuda {
 
 Handle::Handle(infiniDevice_t device, int device_id)
-    : InfiniopHandle{device, device_id},
-      _internal(std::make_shared<Handle::Internal>(device_id)) {}
+    : InfiniopHandle{device, device_id}, _internal(std::make_shared<Handle::Internal>(device_id)) {}
 
-auto Handle::internal() const -> const std::shared_ptr<Internal> & {
-    return _internal;
-}
+auto Handle::internal() const -> const std::shared_ptr<Internal> & { return _internal; }
 
 Handle::Internal::Internal(int device_id) {
     cudaDeviceProp prop;
@@ -23,8 +20,7 @@ Handle::Internal::Internal(int device_id) {
     _grid_size[2] = prop.maxGridSize[2];
 }
 
-infiniStatus_t Handle::Internal::useCublas(cudaStream_t stream,
-                                           const Fn<cublasHandle_t> &f) const {
+infiniStatus_t Handle::Internal::useCublas(cudaStream_t stream, const Fn<cublasHandle_t> &f) const {
     auto handle = blas_handles.pop();
     if (!handle) {
         CHECK_CUBLAS(cublasCreate(&(*handle)));
@@ -35,8 +31,7 @@ infiniStatus_t Handle::Internal::useCublas(cudaStream_t stream,
     return INFINI_STATUS_SUCCESS;
 }
 
-infiniStatus_t Handle::Internal::useCudnn(cudaStream_t stream,
-                                          const Fn<cudnnHandle_t> &f) const {
+infiniStatus_t Handle::Internal::useCudnn(cudaStream_t stream, const Fn<cudnnHandle_t> &f) const {
     auto handle = dnn_handles.pop();
     if (!handle) {
         CHECK_CUDNN(cudnnCreate(&(*handle)));
@@ -47,9 +42,7 @@ infiniStatus_t Handle::Internal::useCudnn(cudaStream_t stream,
     return INFINI_STATUS_SUCCESS;
 }
 
-infiniStatus_t
-Handle::Internal::useCusparse(cudaStream_t stream,
-                              const Fn<cusparseHandle_t> &f) const {
+infiniStatus_t Handle::Internal::useCusparse(cudaStream_t stream, const Fn<cusparseHandle_t> &f) const {
     auto handle = sparse_handles.pop();
     if (!handle) {
         CHECK_CUSPARSE(cusparseCreate(&(*handle)));
@@ -61,9 +54,7 @@ Handle::Internal::useCusparse(cudaStream_t stream,
 }
 
 int Handle::Internal::warpSize() const { return _warp_size; }
-int Handle::Internal::maxThreadsPerBlock() const {
-    return _max_threads_per_block;
-}
+int Handle::Internal::maxThreadsPerBlock() const { return _max_threads_per_block; }
 int Handle::Internal::blockSizeX() const { return _block_size[0]; }
 int Handle::Internal::blockSizeY() const { return _block_size[1]; }
 int Handle::Internal::blockSizeZ() const { return _block_size[2]; }
