@@ -47,7 +47,7 @@ static void spmv_csr_impl(
 #ifdef ENABLE_OMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < num_rows; ++i) {
+    for (int i = 0; i < static_cast<int>(num_rows); ++i) {
         float sum = 0;
         for (int32_t j = row_ptr[i]; j < row_ptr[i + 1]; ++j) {
             sum += values[j] * x[col_idx[j]];

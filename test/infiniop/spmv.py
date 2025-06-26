@@ -21,9 +21,9 @@ from libinfiniop import (
 # ==============================================================================
 # These are not meant to be imported from other modules
 _TEST_CASES = [
-    (100, 200, 0.1),            # Dense small matrix
-    (5000, 3600, 0.01),         # Medium size
-    (10000,100000, 0.0004),    # Large sparse matrix
+    (100, 200, 0.1),  # Dense small matrix
+    (5000, 3600, 0.01),  # Medium size
+    (10000, 100000, 0.0004),  # Large sparse matrix
     # (1000000, 1000000, 0.00001), # Very large sparse matrix
 ]
 
@@ -40,13 +40,16 @@ PROFILE = False
 NUM_PRERUN = 10
 NUM_ITERATIONS = 100
 
+
 # ==============================================================================
 #  Definitions
 # ==============================================================================
 class SpMVDescriptor(Structure):
     _fields_ = [("device", c_int32)]
 
+
 infiniopSpMVDescriptor_t = POINTER(SpMVDescriptor)
+
 
 def generate_unique_indices_batch(nnz, total_elements, device, batch_size=100):
     """
@@ -56,7 +59,7 @@ def generate_unique_indices_batch(nnz, total_elements, device, batch_size=100):
     generated = set()
     result = torch.empty(nnz, dtype=torch.long, device=device)
     count = 0
-    
+
     while count < nnz:
         remaining = nnz - count
         batch_size = min(batch_size, remaining)
@@ -68,8 +71,9 @@ def generate_unique_indices_batch(nnz, total_elements, device, batch_size=100):
                 count += 1
                 if count == nnz:
                     break
-    
+
     return result
+
 
 def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     """
@@ -79,30 +83,30 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
     # Generate random sparse matrix
     total_elements = num_rows * num_cols
     nnz = int(total_elements * density)
-    
+
     # Generate linear indices for non-zero elements
     linear_indices = generate_unique_indices_batch(nnz, total_elements, device)
-    
+
     rows = linear_indices // num_cols
     cols = linear_indices % num_cols
-    
+
     # Sort by row for CSR format
     sorted_indices = torch.argsort(rows * num_cols + cols)
     rows = rows[sorted_indices]
     cols = cols[sorted_indices]
-    
+
     # Create values
     values = torch.ones(nnz, dtype=dtype, device=device)
-    
+
     # Create row pointers (CSR format)
     row_ptr = torch.zeros(num_rows + 1, dtype=torch.int32, device=device)
     for i in range(nnz):
         row_ptr[rows[i] + 1] += 1
     row_ptr = torch.cumsum(row_ptr, dim=0, dtype=torch.int32)
-    
+
     # Column indices
     col_indices = cols.to(torch.int32).to(device)
-    
+
     if DEBUG:
         print("=== CSR Matrix Memory Layout Debug ===")
         print(f"row_ptr: shape={row_ptr.shape}, dtype={row_ptr.dtype}")
@@ -110,7 +114,7 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
         print(f"row_ptr.stride(): {row_ptr.stride()}")
         print(f"row_ptr.storage_offset(): {row_ptr.storage_offset()}")
         print(f"row_ptr values: {row_ptr[:10]}")
-        
+
         print(f"col_indices: shape={col_indices.shape}, dtype={col_indices.dtype}")
         print(f"col_indices.is_contiguous(): {col_indices.is_contiguous()}")
         print(f"col_indices.stride(): {col_indices.stride()}")
@@ -119,20 +123,22 @@ def create_random_csr_matrix(num_rows, num_cols, density, dtype, device):
 
     return values, row_ptr, col_indices, nnz
 
+
 def spmv_reference(values, row_ptr, col_indices, x):
     """
     Reference SpMV implementation using PyTorch.
     """
     num_rows = len(row_ptr) - 1
     y = torch.zeros(num_rows, dtype=values.dtype, device=values.device)
-    
+
     for i in range(num_rows):
         start = row_ptr[i].item()
         end = row_ptr[i + 1].item()
         for j in range(start, end):
             y[i] += values[j] * x[col_indices[j]]
-    
+
     return y
+
 
 def spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols):
     """
@@ -144,18 +150,19 @@ def spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols):
         start = row_ptr[i].item()
         end = row_ptr[i + 1].item()
         row_indices.extend([i] * (end - start))
-    
+
     row_indices = torch.tensor(row_indices, dtype=torch.long, device=values.device)
     col_indices_long = col_indices.long()
-    
+
     # Create sparse tensor
     indices = torch.stack([row_indices, col_indices_long])
     sparse_matrix = torch.sparse_coo_tensor(
         indices, values, (num_rows, num_cols), device=values.device
     ).coalesce()
-    
+
     # Perform SpMV
     return torch.sparse.mm(sparse_matrix, x.unsqueeze(1)).squeeze(1)
+
 
 # The argument list should be (lib, handle, torch_device, <param list>, dtype)
 def test(
@@ -166,7 +173,7 @@ def test(
     num_cols,
     density,
     dtype=torch.float32,
-    sync=None
+    sync=None,
 ):
     print(
         f"Testing SpMV on {torch_device} with num_rows:{num_rows}, num_cols:{num_cols}, "
@@ -177,19 +184,22 @@ def test(
     values, row_ptr, col_indices, nnz = create_random_csr_matrix(
         num_rows, num_cols, density, dtype, torch_device
     )
-    
+
     # Create input vector
     x = torch.ones(num_cols, dtype=dtype, device=torch_device)
-    
+
     # Create output vector
     y = torch.zeros(num_rows, dtype=dtype, device=torch_device)
 
     # Compute reference results
     y_torch_ref = spmv_reference(values, row_ptr, col_indices, x)
     if torch_device == "cuda":
-        y_torch_sparse_ref = spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols)
-        assert torch.allclose(y_torch_ref, y_torch_sparse_ref, atol=1e-6, rtol=1e-5), \
-            "PyTorch sparse reference doesn't match common reference!"
+        y_torch_sparse_ref = spmv_pytorch_reference(
+            values, row_ptr, col_indices, x, num_rows, num_cols
+        )
+        assert torch.allclose(
+            y_torch_ref, y_torch_sparse_ref, atol=1e-6, rtol=1e-5
+        ), "PyTorch sparse reference doesn't match common reference!"
 
     # Create tensors for infiniop
     y_tensor = to_tensor(y, lib)
@@ -210,12 +220,18 @@ def test(
             num_cols,
             num_rows,
             nnz,
-            InfiniDtype.F32 # Only support float32 now.
+            InfiniDtype.F32,  # Only support float32 now.
         )
     )
 
     # Invalidate the descriptors to prevent them from being directly used by the kernel
-    for tensor in [y_tensor, x_tensor, values_tensor, row_ptr_tensor, col_indices_tensor]:
+    for tensor in [
+        y_tensor,
+        x_tensor,
+        values_tensor,
+        row_ptr_tensor,
+        col_indices_tensor,
+    ]:
         tensor.destroyDesc(lib)
 
     # Execute infiniop SpMV operator
@@ -247,36 +263,43 @@ def test(
     atol, rtol = get_tolerance(_TOLERANCE_MAP, dtype)
     if DEBUG:
         debug(y, y_torch_ref, atol=atol, rtol=rtol)
-    
+
     # Check against our reference
-    assert torch.allclose(y, y_torch_ref, atol=atol, rtol=rtol), \
-        f"Results don't match reference! Max diff: {(y - y_torch_ref).abs().max().item()}"
-    
+    assert torch.allclose(
+        y, y_torch_ref, atol=atol, rtol=rtol
+    ), f"Results don't match reference! Max diff: {(y - y_torch_ref).abs().max().item()}"
+
     # Also check against PyTorch sparse reference
     if torch_device == "cuda":
-        assert torch.allclose(y, y_torch_sparse_ref, atol=atol, rtol=rtol), \
-            f"Results don't match PyTorch reference! Max diff: {(y - y_torch_sparse_ref).abs().max().item()}"
+        assert torch.allclose(
+            y, y_torch_sparse_ref, atol=atol, rtol=rtol
+        ), f"Results don't match PyTorch reference! Max diff: {(y - y_torch_sparse_ref).abs().max().item()}"
 
     # Profiling workflow
     if PROFILE:
         profile_operation(
-            "Torch Reference", 
-            lambda: spmv_reference(values, row_ptr, col_indices, x), 
-            torch_device, NUM_PRERUN, NUM_ITERATIONS
+            "Torch Reference",
+            lambda: spmv_reference(values, row_ptr, col_indices, x),
+            torch_device,
+            NUM_PRERUN,
+            NUM_ITERATIONS,
         )
         if torch_device == "cuda":
             profile_operation(
-                "Torch Sparse Reference", 
-                lambda: spmv_pytorch_reference(values, row_ptr, col_indices, x, num_rows, num_cols),
-                torch_device, NUM_PRERUN, NUM_ITERATIONS
+                "Torch Sparse Reference",
+                lambda: spmv_pytorch_reference(
+                    values, row_ptr, col_indices, x, num_rows, num_cols
+                ),
+                torch_device,
+                NUM_PRERUN,
+                NUM_ITERATIONS,
             )
         profile_operation(
-            "    lib", 
-            lambda: lib_spmv(), 
-            torch_device, NUM_PRERUN, NUM_ITERATIONS
+            "    lib", lambda: lib_spmv(), torch_device, NUM_PRERUN, NUM_ITERATIONS
         )
-    
+
     check_error(lib.infiniopDestroySpMVDescriptor(descriptor))
+
 
 # ==============================================================================
 #  Main Execution
@@ -291,9 +314,9 @@ if __name__ == "__main__":
         infiniopHandle_t,
         POINTER(infiniopSpMVDescriptor_t),
         c_size_t,  # num_cols
-        c_size_t,  # num_rows  
+        c_size_t,  # num_rows
         c_size_t,  # nnz
-        c_int32,   # dtype
+        c_int32,  # dtype
     ]
 
     lib.infiniopSpMV.restype = c_int32
