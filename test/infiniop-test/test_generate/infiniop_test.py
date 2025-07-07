@@ -81,3 +81,28 @@ class InfiniopTestWriter(gguf.GGUFWriter):
         super().write_kv_data_to_file()
         super().write_tensors_to_file()
         super().close()
+
+    # def add_tensor(self, key: str, tensor, raw_dtype=None, raw_shape=None):
+    #     """重写 add_tensor 方法以支持 torch.Tensor，包括保留 bfloat16"""
+    #     if isinstance(tensor, torch.Tensor):
+    #         if tensor.dtype == torch.bfloat16:
+    #             # 保留 bfloat16 类型，转换为 numpy 的 uint16 表示
+    #             # bfloat16 可以表示为 uint16，因为它只是 float32 的高 16 位
+    #             numpy_tensor = tensor.view(torch.uint16).numpy()
+    #             if raw_dtype is None:
+    #                 raw_dtype = gguf.GGMLQuantizationType.BF16
+    #             if raw_shape is None:
+    #                 raw_shape = tensor.shape
+    #         else:
+    #             # 其他类型正常转换
+    #             numpy_tensor = tensor.numpy()
+    #             if raw_dtype is None:
+    #                 raw_dtype = np_dtype_to_ggml(numpy_tensor.dtype)
+    #             if raw_shape is None:
+    #                 raw_shape = tensor.shape
+            
+    #         # 调用父类的 add_tensor 方法
+    #         super().add_tensor(key, numpy_tensor, raw_dtype=raw_dtype, raw_shape=raw_shape)
+    #     else:
+    #         # 如果不是 torch.Tensor，直接调用父类方法
+    #         super().add_tensor(key, tensor, raw_dtype=raw_dtype, raw_shape=raw_shape)

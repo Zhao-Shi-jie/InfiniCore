@@ -9,6 +9,7 @@ from .. import InfiniopTestWriter, InfiniopTestCase, np_dtype_to_ggml, gguf_stri
 
 def averagepool_backward_1d(
     input_tensor: torch.Tensor,
+    grad_output: torch.Tensor,
     kernel_size: int,
     stride: int = None,
     padding: int = 0,
@@ -16,8 +17,7 @@ def averagepool_backward_1d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """1D Average Pooling Forward + Backward using PyTorch"""
-    # 设置requires_grad=True以便计算梯度
+    """1D Average Pooling Backward using PyTorch"""
     input_tensor = input_tensor.clone().requires_grad_(True)
     
     # 前向传播
@@ -30,10 +30,7 @@ def averagepool_backward_1d(
         count_include_pad=count_include_pad,
     )
     
-    # 创建与输出相同形状的梯度张量
-    grad_output = torch.ones_like(output)
-    
-    # 反向传播
+    # 反向传播 - 使用提供的grad_output
     output.backward(grad_output)
     
     return output, input_tensor.grad
@@ -41,6 +38,7 @@ def averagepool_backward_1d(
 
 def averagepool_backward_2d(
     input_tensor: torch.Tensor,
+    grad_output: torch.Tensor,
     kernel_size: Union[int, Tuple[int, int]],
     stride: Union[int, Tuple[int, int]] = None,
     padding: Union[int, Tuple[int, int]] = 0,
@@ -48,7 +46,7 @@ def averagepool_backward_2d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """2D Average Pooling Forward + Backward using PyTorch"""
+    """2D Average Pooling Backward using PyTorch"""
     input_tensor = input_tensor.clone().requires_grad_(True)
     
     # 前向传播
@@ -62,10 +60,7 @@ def averagepool_backward_2d(
         divisor_override=divisor_override,
     )
     
-    # 创建与输出相同形状的梯度张量
-    grad_output = torch.ones_like(output)
-    
-    # 反向传播
+    # 反向传播 - 使用提供的grad_output
     output.backward(grad_output)
     
     return output, input_tensor.grad
@@ -73,6 +68,7 @@ def averagepool_backward_2d(
 
 def averagepool_backward_3d(
     input_tensor: torch.Tensor,
+    grad_output: torch.Tensor,
     kernel_size: Union[int, Tuple[int, int, int]],
     stride: Union[int, Tuple[int, int, int]] = None,
     padding: Union[int, Tuple[int, int, int]] = 0,
@@ -80,12 +76,13 @@ def averagepool_backward_3d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """3D Average Pooling Forward + Backward using PyTorch"""
+    """3D Average Pooling Backward using PyTorch"""
     original_dtype = input_tensor.dtype
 
     # a transform as "RuntimeError: "avg_pool3d_out_frame" not implemented for 'Half'"
     if input_tensor.dtype in [torch.bfloat16, torch.float16]:
         input_tensor = input_tensor.float()
+        grad_output = grad_output.float()
 
     input_tensor = input_tensor.clone().requires_grad_(True)
     
@@ -100,19 +97,17 @@ def averagepool_backward_3d(
         divisor_override=divisor_override,
     )
 
-    # 创建与输出相同形状的梯度张量
-    grad_output = torch.ones_like(output)
-    # 反向传播
+    # 反向传播 - 使用提供的grad_output
     output.backward(grad_output)
 
     # 梯度计算完成后，转换回原始类型
     if original_dtype in [torch.bfloat16, torch.float16]:
         output = output.to(original_dtype)
-        grad_output = input_tensor.grad.to(original_dtype)
+        grad_input = input_tensor.grad.to(original_dtype)
     else:
-        grad_output = input_tensor.grad
+        grad_input = input_tensor.grad
     
-    return output, grad_output
+    return output, grad_input
 
 
 def random_tensor(shape, dtype):
@@ -146,19 +141,18 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
         # 随机生成输入张量
         self.input_tensor = random_tensor(input_size, dtype)
         
-        # 计算前向输出和反向梯度
+        # 先进行前向传播获取输出形状
         if self.pool_dim == 1:
-            self.forward_output, self.backward_output = averagepool_backward_1d(
+            forward_output = F.avg_pool1d(
                 self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
                 self.ceil_mode,
                 self.count_include_pad,
-                self.divisor_override,
             )
         elif self.pool_dim == 2:
-            self.forward_output, self.backward_output = averagepool_backward_2d(
+            forward_output = F.avg_pool2d(
                 self.input_tensor,
                 self.kernel_size,
                 self.stride,
@@ -168,8 +162,12 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
                 self.divisor_override,
             )
         elif self.pool_dim == 3:
-            self.forward_output, self.backward_output = averagepool_backward_3d(
-                self.input_tensor,
+            if dtype in [torch.bfloat16, torch.float16]:
+                temp_input = self.input_tensor.float()
+            else:
+                temp_input = self.input_tensor
+            forward_output = F.avg_pool3d(
+                temp_input,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -177,29 +175,81 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
                 self.count_include_pad,
                 self.divisor_override,
             )
+            if dtype in [torch.bfloat16, torch.float16]:
+                forward_output = forward_output.to(dtype)
         else:
             raise ValueError(f"Unsupported pool dimension: {self.pool_dim}")
+        
+        # 生成随机的grad_output
+        self.grad_output = random_tensor(forward_output.shape, dtype)
+        self.forward_output = forward_output
+        
+        # 计算反向梯度
+        if self.pool_dim == 1:
+            _, self.backward_output = averagepool_backward_1d(
+                self.input_tensor,
+                self.grad_output,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.ceil_mode,
+                self.count_include_pad,
+                self.divisor_override,
+            )
+        elif self.pool_dim == 2:
+            _, self.backward_output = averagepool_backward_2d(
+                self.input_tensor,
+                self.grad_output,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.ceil_mode,
+                self.count_include_pad,
+                self.divisor_override,
+            )
+        elif self.pool_dim == 3:
+            _, self.backward_output = averagepool_backward_3d(
+                self.input_tensor,
+                self.grad_output,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.ceil_mode,
+                self.count_include_pad,
+                self.divisor_override,
+            )
 
     def write_test(self, test_writer: "InfiniopTestWriter"):
         super().write_test(test_writer)
         
-        # 处理forward_output（反向传播的输入）
-        if self.forward_output.dtype == torch.bfloat16:
-            forward_output_numpy = self.forward_output.view(torch.uint16).detach().numpy()
+        # 处理grad_output（反向传播的输入）
+        if self.grad_output.dtype == torch.bfloat16:
+            grad_output_numpy = self.grad_output.view(torch.uint16).detach().numpy()
             ggml_dtype_input = gguf.GGMLQuantizationType.BF16
         else:
-            forward_output_numpy = self.forward_output.detach().numpy()
-            ggml_dtype_input = np_dtype_to_ggml(forward_output_numpy.dtype)
+            grad_output_numpy = self.grad_output.detach().numpy()
+            ggml_dtype_input = np_dtype_to_ggml(grad_output_numpy.dtype)
         
-        # Add forward_output tensor (input for backward pass)
+        # Add grad_output tensor (input for backward pass)
         test_writer.add_tensor(
-            test_writer.gguf_key("input"),
-            forward_output_numpy,
+            test_writer.gguf_key("grad_output"),
+            grad_output_numpy,
             raw_dtype=ggml_dtype_input,
         )
         
-        # # Add input_size information (原始输入的尺寸)
-        # test_writer.add_array(test_writer.gguf_key("input_size"), list(self.input_tensor.shape))
+        # Add complete input tensor (原始输入)
+        if self.input_tensor.dtype == torch.bfloat16:
+            input_numpy = self.input_tensor.view(torch.uint16).detach().numpy()
+            ggml_dtype_input_tensor = gguf.GGMLQuantizationType.BF16
+        else:
+            input_numpy = self.input_tensor.detach().numpy()
+            ggml_dtype_input_tensor = np_dtype_to_ggml(input_numpy.dtype)
+        
+        test_writer.add_tensor(
+            test_writer.gguf_key("input"),
+            input_numpy,
+            raw_dtype=ggml_dtype_input_tensor,
+        )
         
         # Add parameters
         if isinstance(self.kernel_size, int):
@@ -227,7 +277,7 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
         # Add backward_output tensor (output of backward pass) - 使用float64精度
         backward_output_f64 = self.backward_output.double()
         test_writer.add_tensor(
-            test_writer.gguf_key("output"),
+            test_writer.gguf_key("grad_input"),
             backward_output_f64.numpy(),
             raw_dtype=gguf.GGMLQuantizationType.F64,
         )
