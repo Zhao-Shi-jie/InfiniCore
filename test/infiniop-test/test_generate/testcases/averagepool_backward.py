@@ -17,8 +17,10 @@ def averagepool_backward_1d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """1D Average Pooling Backward using PyTorch"""
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """1D Average Pooling Backward using PyTorch with double precision"""
+    # Convert to double precision for computation
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     output = F.avg_pool1d(
@@ -46,8 +48,10 @@ def averagepool_backward_2d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """2D Average Pooling Backward using PyTorch"""
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """2D Average Pooling Backward using PyTorch with double precision"""
+    # Convert to double precision for computation
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     output = F.avg_pool2d(
@@ -76,15 +80,10 @@ def averagepool_backward_3d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """3D Average Pooling Backward using PyTorch"""
-    original_dtype = input_tensor.dtype
-
-    # a transform as "RuntimeError: "avg_pool3d_out_frame" not implemented for 'Half'"
-    if input_tensor.dtype in [torch.bfloat16, torch.float16]:
-        input_tensor = input_tensor.float()
-        grad_output = grad_output.float()
-
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """3D Average Pooling Backward using PyTorch with double precision"""
+    # Convert to double precision for computation (handles half precision limitation)
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     output = F.avg_pool3d(
@@ -99,15 +98,8 @@ def averagepool_backward_3d(
 
     # 反向传播 - 使用提供的grad_output
     output.backward(grad_output)
-
-    # 梯度计算完成后，转换回原始类型
-    if original_dtype in [torch.bfloat16, torch.float16]:
-        output = output.to(original_dtype)
-        grad_input = input_tensor.grad.to(original_dtype)
-    else:
-        grad_input = input_tensor.grad
     
-    return output, grad_input
+    return output, input_tensor.grad
 
 
 def random_tensor(shape, dtype):
@@ -162,6 +154,7 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
                 self.divisor_override,
             )
         elif self.pool_dim == 3:
+            # Handle half precision limitation for 3D pooling
             if dtype in [torch.bfloat16, torch.float16]:
                 temp_input = self.input_tensor.float()
             else:
@@ -274,11 +267,10 @@ class AveragePoolBackwardTestCase(InfiniopTestCase):
         if self.divisor_override is not None:
             test_writer.add_int32(test_writer.gguf_key("divisor_override"), self.divisor_override)
             
-        # Add backward_output tensor (output of backward pass) - 使用float64精度
-        backward_output_f64 = self.backward_output.double()
+        # Add backward_output tensor (output of backward pass) - 使用double精度
         test_writer.add_tensor(
             test_writer.gguf_key("grad_input"),
-            backward_output_f64.numpy(),
+            self.backward_output.numpy(),
             raw_dtype=gguf.GGMLQuantizationType.F64,
         )
 

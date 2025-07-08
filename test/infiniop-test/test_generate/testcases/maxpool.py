@@ -18,9 +18,9 @@ def maxpool1d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """1D Max Pooling using PyTorch"""
+    """1D Max Pooling using PyTorch with double precision"""
     result = F.max_pool1d(
-        input_tensor,
+        input_tensor.double(),
         kernel_size=kernel_size,
         stride=stride,
         padding=padding,
@@ -30,8 +30,8 @@ def maxpool1d(
     )
     
     if return_indices:
-        return result[0]  # Only return values, not indices for test cases
-    return result
+        return result[0], result[1]  # Return both values and indices
+    return result, None
 
 
 def maxpool2d(
@@ -43,9 +43,9 @@ def maxpool2d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """2D Max Pooling using PyTorch"""
+    """2D Max Pooling using PyTorch with double precision"""
     result = F.max_pool2d(
-        input_tensor,
+        input_tensor.double(),
         kernel_size=kernel_size,
         stride=stride,
         padding=padding,
@@ -55,8 +55,8 @@ def maxpool2d(
     )
     
     if return_indices:
-        return result[0]  # Only return values, not indices for test cases
-    return result
+        return result[0], result[1]  # Return both values and indices
+    return result, None
 
 
 def maxpool3d(
@@ -68,9 +68,9 @@ def maxpool3d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """3D Max Pooling using PyTorch"""
+    """3D Max Pooling using PyTorch with double precision"""
     result = F.max_pool3d(
-        input_tensor,
+        input_tensor.double(),
         kernel_size=kernel_size,
         stride=stride,
         padding=padding,
@@ -80,8 +80,8 @@ def maxpool3d(
     )
     
     if return_indices:
-        return result[0]  # Only return values, not indices for test cases
-    return result
+        return result[0], result[1]  # Return both values and indices
+    return result, None
 
 
 def random_tensor(shape, dtype):
@@ -115,6 +115,7 @@ class MaxPoolTestCase(InfiniopTestCase):
     def write_test(self, test_writer: "InfiniopTestWriter"):
         super().write_test(test_writer)
         
+        # Keep input tensor in original data type
         if self.input_tensor.dtype == torch.bfloat16:
             input_numpy = self.input_tensor.view(torch.uint16).numpy()
             ggml_dtype = gguf.GGMLQuantizationType.BF16
@@ -154,12 +155,10 @@ class MaxPoolTestCase(InfiniopTestCase):
         test_writer.add_bool(test_writer.gguf_key("ceil_mode"), self.ceil_mode)
         test_writer.add_bool(test_writer.gguf_key("return_indices"), self.return_indices)
             
-        # Compute expected output using PyTorch with float64 precision
-        input_f64 = self.input_tensor.double()
-        
+        # Compute expected output using double precision
         if self.pool_dim == 1:
-            ans = maxpool1d(
-                input_f64,
+            ans, indices = maxpool1d(
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -168,8 +167,8 @@ class MaxPoolTestCase(InfiniopTestCase):
                 self.return_indices,
             )
         elif self.pool_dim == 2:
-            ans = maxpool2d(
-                input_f64,
+            ans, indices = maxpool2d(
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -178,8 +177,8 @@ class MaxPoolTestCase(InfiniopTestCase):
                 self.return_indices,
             )
         elif self.pool_dim == 3:
-            ans = maxpool3d(
-                input_f64,
+            ans, indices = maxpool3d(
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -190,11 +189,20 @@ class MaxPoolTestCase(InfiniopTestCase):
         else:
             raise ValueError(f"Unsupported pool dimension: {self.pool_dim}")
             
+        # Store output in double precision
         test_writer.add_tensor(
             test_writer.gguf_key("output"),
             ans.numpy(),
             raw_dtype=gguf.GGMLQuantizationType.F64,
         )
+        
+        # Store indices in 32-bit integer format when return_indices=True
+        if self.return_indices and indices is not None:
+            test_writer.add_tensor(
+                test_writer.gguf_key("indices"),
+                indices.detach().numpy().astype(np.int32),
+                raw_dtype=gguf.GGMLQuantizationType.I32,
+            )
 
 
 if __name__ == "__main__":
@@ -213,7 +221,7 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((4, 8, 128), dtype),
-                kernel_size=3, stride=1, padding=1, pool_dim=1,  # padding was 0, changed to 1
+                kernel_size=3, stride=1, padding=1, pool_dim=1,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 16, 256), dtype),
@@ -221,7 +229,7 @@ if __name__ == "__main__":
             ),
             MaxPoolTestCase(
                 random_tensor((8, 4, 64), dtype),
-                kernel_size=7, stride=3, padding=3, pool_dim=1,  # padding was 1, changed to 3
+                kernel_size=7, stride=3, padding=3, pool_dim=1,
             ),
         ])
         
@@ -241,11 +249,11 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((1, 3, 99), dtype),
-                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=1,  # padding was 1, changed to 2
+                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=1,
             ),
             MaxPoolTestCase(
                 random_tensor((3, 2, 77), dtype),
-                kernel_size=6, stride=4, padding=3, ceil_mode=True, pool_dim=1,  # padding was 0, changed to 3
+                kernel_size=6, stride=4, padding=3, ceil_mode=True, pool_dim=1,
             ),
         ])
         
@@ -262,7 +270,7 @@ if __name__ == "__main__":
             ),
             MaxPoolTestCase(
                 random_tensor((1, 8, 96, 96), dtype),
-                kernel_size=7, stride=3, padding=3, pool_dim=2,  # padding was 0, changed to 3
+                kernel_size=7, stride=3, padding=3, pool_dim=2,
             ),
         ])
         
@@ -278,7 +286,7 @@ if __name__ == "__main__":
             ),
             MaxPoolTestCase(
                 random_tensor((3, 2, 56, 84), dtype),
-                kernel_size=(2, 4), stride=(2, 3), padding=(1, 2), pool_dim=2,  # padding was (0, 2), changed to (1, 2)
+                kernel_size=(2, 4), stride=(2, 3), padding=(1, 2), pool_dim=2,
             ),
         ])
         
@@ -286,15 +294,15 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((2, 3, 48, 48), dtype),
-                kernel_size=3, stride=1, padding=1, dilation=2, pool_dim=2,  # padding was 2, changed to 1
+                kernel_size=3, stride=1, padding=1, dilation=2, pool_dim=2,
             ),
             MaxPoolTestCase(
                 random_tensor((1, 4, 64, 64), dtype),
-                kernel_size=(3, 5), stride=(1, 2), padding=(1, 2), dilation=(2, 3), pool_dim=2,  # padding was (2, 3), changed to (1, 2)
+                kernel_size=(3, 5), stride=(1, 2), padding=(1, 2), dilation=(2, 3), pool_dim=2,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 2, 72, 72), dtype),
-                kernel_size=5, stride=2, padding=2, dilation=3, pool_dim=2,  # padding was 4, changed to 2
+                kernel_size=5, stride=2, padding=2, dilation=3, pool_dim=2,
             ),
         ])
         
@@ -302,7 +310,7 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((1, 1, 33, 33), dtype),
-                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=2,  # padding was 1, changed to 2
+                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=2,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 5, 77, 89), dtype),
@@ -335,7 +343,7 @@ if __name__ == "__main__":
             ),
             MaxPoolTestCase(
                 random_tensor((1, 1, 64, 64, 64), dtype),
-                kernel_size=7, stride=3, padding=3, pool_dim=3,  # padding was 0, changed to 3
+                kernel_size=7, stride=3, padding=3, pool_dim=3,
             ),
         ])
         
@@ -343,7 +351,7 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((1, 3, 24, 36, 48), dtype),
-                kernel_size=(2, 3, 4), stride=(1, 2, 2), padding=(1, 1, 2), pool_dim=3,  # padding was (0, 1, 2), changed to (1, 1, 2)
+                kernel_size=(2, 3, 4), stride=(1, 2, 2), padding=(1, 1, 2), pool_dim=3,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 2, 40, 32, 56), dtype),
@@ -359,15 +367,15 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((1, 2, 32, 32, 32), dtype),
-                kernel_size=3, stride=1, padding=1, dilation=2, pool_dim=3,  # padding was 2, changed to 1
+                kernel_size=3, stride=1, padding=1, dilation=2, pool_dim=3,
             ),
             MaxPoolTestCase(
                 random_tensor((1, 1, 48, 48, 48), dtype),
-                kernel_size=(3, 3, 5), stride=(1, 1, 2), padding=(1, 1, 2), dilation=(2, 2, 3), pool_dim=3,  # padding was (2, 2, 3), changed to (1, 1, 2)
+                kernel_size=(3, 3, 5), stride=(1, 1, 2), padding=(1, 1, 2), dilation=(2, 2, 3), pool_dim=3,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 2, 56, 40, 48), dtype),
-                kernel_size=(2, 4, 3), stride=(1, 2, 2), padding=(1, 2, 1), dilation=(1, 2, 1), pool_dim=3,  # padding was (1, 3, 2), changed to (1, 2, 1)
+                kernel_size=(2, 4, 3), stride=(1, 2, 2), padding=(1, 2, 1), dilation=(1, 2, 1), pool_dim=3,
             ),
         ])
         
@@ -375,11 +383,11 @@ if __name__ == "__main__":
         test_cases.extend([
             MaxPoolTestCase(
                 random_tensor((1, 1, 27, 27, 27), dtype),
-                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=3,  # padding was 1, changed to 2
+                kernel_size=4, stride=3, padding=2, ceil_mode=True, pool_dim=3,
             ),
             MaxPoolTestCase(
                 random_tensor((2, 2, 33, 45, 39), dtype),
-                kernel_size=(5, 3, 4), stride=(3, 2, 3), padding=(2, 1, 2), ceil_mode=True, pool_dim=3,  # padding was (2, 1, 1), changed to (2, 1, 2)
+                kernel_size=(5, 3, 4), stride=(3, 2, 3), padding=(2, 1, 2), ceil_mode=True, pool_dim=3,
             ),
         ])
         
@@ -409,7 +417,7 @@ if __name__ == "__main__":
         # Large dilation
         MaxPoolTestCase(
             random_tensor((1, 2, 96, 96), torch.bfloat16),
-            kernel_size=3, stride=1, padding=1, dilation=8, pool_dim=2,  # padding was 8, changed to 1
+            kernel_size=3, stride=1, padding=1, dilation=8, pool_dim=2,
         ),
         # Kernel size equals input size
         MaxPoolTestCase(
@@ -429,7 +437,7 @@ if __name__ == "__main__":
         # Large dilation 3D
         MaxPoolTestCase(
             random_tensor((1, 1, 64, 64, 64), torch.float32),
-            kernel_size=3, stride=1, padding=1, dilation=4, pool_dim=3,  # padding was 4, changed to 1
+            kernel_size=3, stride=1, padding=1, dilation=4, pool_dim=3,
         ),
     ]
     

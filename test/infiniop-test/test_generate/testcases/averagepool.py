@@ -18,7 +18,7 @@ def averagepool1d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """1D Average Pooling using PyTorch"""
+    """1D Average Pooling using PyTorch with double precision"""
     pool = nn.AvgPool1d(
         kernel_size=kernel_size,
         stride=stride,
@@ -29,7 +29,7 @@ def averagepool1d(
     if divisor_override is not None:
         # divisor_override must be None for AvgPool1d in PyTorch
         pass
-    result = pool(input_tensor)
+    result = pool(input_tensor.double())
     return result
 
 
@@ -42,7 +42,7 @@ def averagepool2d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """2D Average Pooling using PyTorch"""
+    """2D Average Pooling using PyTorch with double precision"""
     pool = nn.AvgPool2d(
         kernel_size=kernel_size,
         stride=stride,
@@ -51,7 +51,7 @@ def averagepool2d(
         count_include_pad=count_include_pad,
         divisor_override=divisor_override,
     )
-    result = pool(input_tensor)
+    result = pool(input_tensor.double())
     return result
 
 
@@ -64,7 +64,7 @@ def averagepool3d(
     count_include_pad: bool = True,
     divisor_override: int = None,
 ):
-    """3D Average Pooling using PyTorch"""
+    """3D Average Pooling using PyTorch with double precision"""
     pool = nn.AvgPool3d(
         kernel_size=kernel_size,
         stride=stride,
@@ -73,7 +73,7 @@ def averagepool3d(
         count_include_pad=count_include_pad,
         divisor_override=divisor_override,
     )
-    result = pool(input_tensor)
+    result = pool(input_tensor.double())
     return result
 
 
@@ -108,6 +108,7 @@ class AveragePoolTestCase(InfiniopTestCase):
     def write_test(self, test_writer: "InfiniopTestWriter"):
         super().write_test(test_writer)
         
+        # Keep input tensor in original data type
         if self.input_tensor.dtype == torch.bfloat16:
             input_numpy = self.input_tensor.view(torch.uint16).numpy()
             ggml_dtype = gguf.GGMLQuantizationType.BF16
@@ -148,12 +149,10 @@ class AveragePoolTestCase(InfiniopTestCase):
         if self.divisor_override is not None:
             test_writer.add_int32(test_writer.gguf_key("divisor_override"), self.divisor_override)
             
-        # Compute expected output using PyTorch with float64 precision
-        input_f64 = self.input_tensor.double()
-        
+        # Compute expected output using double precision
         if self.pool_dim == 1:
             ans = averagepool1d(
-                input_f64,
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -163,7 +162,7 @@ class AveragePoolTestCase(InfiniopTestCase):
             )
         elif self.pool_dim == 2:
             ans = averagepool2d(
-                input_f64,
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -173,7 +172,7 @@ class AveragePoolTestCase(InfiniopTestCase):
             )
         elif self.pool_dim == 3:
             ans = averagepool3d(
-                input_f64,
+                self.input_tensor,
                 self.kernel_size,
                 self.stride,
                 self.padding,
@@ -184,6 +183,7 @@ class AveragePoolTestCase(InfiniopTestCase):
         else:
             raise ValueError(f"Unsupported pool dimension: {self.pool_dim}")
             
+        # Store output in double precision
         test_writer.add_tensor(
             test_writer.gguf_key("output"),
             ans.numpy(),

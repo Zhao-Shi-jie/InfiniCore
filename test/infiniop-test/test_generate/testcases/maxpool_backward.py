@@ -17,8 +17,10 @@ def maxpool_backward_1d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """1D Max Pooling Forward + Backward using PyTorch"""
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """1D Max Pooling Forward + Backward using PyTorch with double precision"""
+    # Convert to double precision for computation
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     if return_indices:
@@ -59,8 +61,10 @@ def maxpool_backward_2d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """2D Max Pooling Forward + Backward using PyTorch"""
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """2D Max Pooling Forward + Backward using PyTorch with double precision"""
+    # Convert to double precision for computation
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     if return_indices:
@@ -101,8 +105,10 @@ def maxpool_backward_3d(
     ceil_mode: bool = False,
     return_indices: bool = False,
 ):
-    """3D Max Pooling Forward + Backward using PyTorch"""
-    input_tensor = input_tensor.clone().requires_grad_(True)
+    """3D Max Pooling Forward + Backward using PyTorch with double precision"""
+    # Convert to double precision for computation
+    input_tensor = input_tensor.double().clone().requires_grad_(True)
+    grad_output = grad_output.double()
     
     # 前向传播
     if return_indices:
@@ -273,29 +279,23 @@ class MaxPoolBackwardTestCase(InfiniopTestCase):
     def write_test(self, test_writer: "InfiniopTestWriter"):
         super().write_test(test_writer)
         
-        # 处理grad_output（反向传播的输入）
-        if self.grad_output.dtype == torch.bfloat16:
-            grad_output_numpy = self.grad_output.view(torch.uint16).detach().numpy()
-            ggml_dtype_grad = gguf.GGMLQuantizationType.BF16
-        else:
-            grad_output_numpy = self.grad_output.detach().numpy()
-            ggml_dtype_grad = np_dtype_to_ggml(grad_output_numpy.dtype)
+        # Helper function to handle data type conversion - keep original data type
+        def convert_tensor(tensor):
+            if tensor.dtype == torch.bfloat16:
+                return tensor.view(torch.uint16).detach().numpy(), gguf.GGMLQuantizationType.BF16
+            else:
+                return tensor.detach().numpy(), np_dtype_to_ggml(tensor.detach().numpy().dtype)
         
-        # Add grad_output tensor
+        # Add grad_output tensor (input for backward pass) - keep original data type
+        grad_output_numpy, ggml_dtype_grad = convert_tensor(self.grad_output)
         test_writer.add_tensor(
             test_writer.gguf_key("grad_output"),
             grad_output_numpy,
             raw_dtype=ggml_dtype_grad,
         )
         
-        # Add complete input tensor
-        if self.input_tensor.dtype == torch.bfloat16:
-            input_numpy = self.input_tensor.view(torch.uint16).detach().numpy()
-            ggml_dtype_input = gguf.GGMLQuantizationType.BF16
-        else:
-            input_numpy = self.input_tensor.detach().numpy()
-            ggml_dtype_input = np_dtype_to_ggml(input_numpy.dtype)
-        
+        # Add complete input tensor - keep original data type
+        input_numpy, ggml_dtype_input = convert_tensor(self.input_tensor)
         test_writer.add_tensor(
             test_writer.gguf_key("input"),
             input_numpy,
@@ -331,15 +331,14 @@ class MaxPoolBackwardTestCase(InfiniopTestCase):
         if self.return_indices and self.indices is not None:
             test_writer.add_tensor(
                 test_writer.gguf_key("indices"),
-                self.indices.detach().numpy().astype(np.int64),
-                raw_dtype=gguf.GGMLQuantizationType.I64,
+                self.indices.detach().numpy().astype(np.int32),
+                raw_dtype=gguf.GGMLQuantizationType.I32,
             )
             
-        # Add grad_input tensor (output of backward pass) - 使用float64精度
-        backward_output_f64 = self.backward_output.double()
+        # Add grad_input tensor (output of backward pass) - 使用double精度
         test_writer.add_tensor(
             test_writer.gguf_key("grad_input"),
-            backward_output_f64.numpy(),
+            self.backward_output.numpy(),
             raw_dtype=gguf.GGMLQuantizationType.F64,
         )
 
