@@ -8,6 +8,7 @@
 #include "infiniop/ops/clip.h"
 #include "infiniop/ops/conv.h"
 #include "infiniop/ops/gemm.h"
+#include "infiniop/ops/interpolate_nearest.h"
 #include "infiniop/ops/mul.h"
 #include "infiniop/ops/random_sample.h"
 #include "infiniop/ops/rearrange.h"
