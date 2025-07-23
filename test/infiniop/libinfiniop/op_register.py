@@ -4,7 +4,7 @@ from .structs import (
     infiniopOperatorDescriptor_t,
 )
 
-from ctypes import c_int32, c_void_p, c_size_t, POINTER, c_float
+from ctypes import c_int32, c_void_p, c_size_t, POINTER, c_float, c_bool
 
 
 class OpRegister:
@@ -518,5 +518,40 @@ def interpolate_nearest_(lib):
 
     lib.infiniopDestroyInterpolateNearestDescriptor.restype = c_int32
     lib.infiniopDestroyInterpolateNearestDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+@OpRegister.operator
+def max_pool_(lib):
+    lib.infiniopCreateMaxPoolDescriptor.restype = c_int32
+    lib.infiniopCreateMaxPoolDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        c_void_p,                    # kernel_size
+        c_void_p,                    # strides
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
+    ]
+
+    lib.infiniopGetMaxPoolWorkspaceSize.restype = c_int32
+    lib.infiniopGetMaxPoolWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopMaxPool.restype = c_int32
+    lib.infiniopMaxPool.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyMaxPoolDescriptor.restype = c_int32
+    lib.infiniopDestroyMaxPoolDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
