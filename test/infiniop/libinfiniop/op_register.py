@@ -555,3 +555,40 @@ def max_pool_(lib):
     lib.infiniopDestroyMaxPoolDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+@OpRegister.operator
+def max_pool_backward_(lib):
+    lib.infiniopCreateMaxPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopCreateMaxPoolBackwardDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # grad_input_desc
+        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        c_void_p,                    # kernel_size
+        c_void_p,                    # strides
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
+    ]
+
+    lib.infiniopGetMaxPoolBackwardWorkspaceSize.restype = c_int32
+    lib.infiniopGetMaxPoolBackwardWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopMaxPoolBackward.restype = c_int32
+    lib.infiniopMaxPoolBackward.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # grad_input
+        c_void_p,                      # grad_output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyMaxPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopDestroyMaxPoolBackwardDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
