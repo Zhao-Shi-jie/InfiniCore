@@ -5,6 +5,9 @@
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/interpolate_nearest_nvidia.cuh"
 #endif
+#ifdef ENABLE_METAX_API
+#include "metax/interpolate_nearest_metax.h"
+#endif
 
 __C infiniStatus_t infiniopCreateInterpolateNearestDescriptor(
     infiniopHandle_t handle,
@@ -27,6 +30,9 @@ __C infiniStatus_t infiniopCreateInterpolateNearestDescriptor(
 #endif
 #ifdef ENABLE_ILUVATAR_API
         CREATE(INFINI_DEVICE_ILUVATAR, nvidia);
+#endif
+#ifdef ENABLE_METAX_API
+        CREATE(INFINI_DEVICE_METAX, metax);
 #endif
 
     default:
@@ -52,6 +58,10 @@ __C infiniStatus_t infiniopGetInterpolateNearestWorkspaceSize(
 #ifdef ENABLE_ILUVATAR_API
         GET(INFINI_DEVICE_ILUVATAR, nvidia);
 #endif
+#ifdef ENABLE_METAX_API
+        GET(INFINI_DEVICE_METAX, metax);
+#endif
+
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -80,6 +90,9 @@ __C infiniStatus_t infiniopInterpolateNearest(
 #ifdef ENABLE_ILUVATAR_API
         CALCULATE(INFINI_DEVICE_ILUVATAR, nvidia);
 #endif
+#ifdef ENABLE_METAX_API
+        CALCULATE(INFINI_DEVICE_METAX, metax);
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -103,6 +116,9 @@ __C infiniStatus_t infiniopDestroyInterpolateNearestDescriptor(
 #endif
 #ifdef ENABLE_ILUVATAR_API
         DELETE(INFINI_DEVICE_ILUVATAR, nvidia);
+#endif
+#ifdef ENABLE_METAX_API
+        DELETE(INFINI_DEVICE_METAX, metax);
 #endif
 
     default:
