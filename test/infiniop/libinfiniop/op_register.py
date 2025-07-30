@@ -592,3 +592,44 @@ def max_pool_backward_(lib):
     lib.infiniopDestroyMaxPoolBackwardDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+@OpRegister.operator
+def conv_backward_(lib):
+    lib.infiniopCreateConvBackwardDescriptor.restype = c_int32
+    lib.infiniopCreateConvBackwardDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        infiniopTensorDescriptor_t,  # weight_desc
+        infiniopTensorDescriptor_t,  # bias_desc (can be None)
+        c_void_p,                    # pads
+        c_void_p,                    # strides
+        c_void_p,                    # dilations
+        c_size_t,                    # ndim
+    ]
+
+    lib.infiniopGetConvBackwardWorkspaceSize.restype = c_int32
+    lib.infiniopGetConvBackwardWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopConvBackward.restype = c_int32
+    lib.infiniopConvBackward.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,      # workspace
+        c_size_t,      # workspace_size
+        c_void_p,      # grad_input
+        c_void_p,      # grad_weight
+        c_void_p,      # grad_bias
+        c_void_p,      # grad_output
+        c_void_p,      # input
+        c_void_p,      # weight
+        c_void_p,      # stream
+    ]
+
+    lib.infiniopDestroyConvBackwardDescriptor.restype = c_int32
+    lib.infiniopDestroyConvBackwardDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
