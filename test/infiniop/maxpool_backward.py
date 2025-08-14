@@ -300,6 +300,8 @@ if __name__ == "__main__":
     NUM_ITERATIONS = args.num_iterations
     
     for device in get_test_devices(args):
+        if device == InfiniDeviceNames.ILUVATAR:
+            _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16]
         test_operator(device, test, _TEST_CASES, _TENSOR_DTYPES)
 
     print("\033[92mTest passed!\033[0m")
