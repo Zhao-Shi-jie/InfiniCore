@@ -1,46 +1,12 @@
 #include "../../../devices/nvidia/nvidia_common.cuh"
 #include "../../../devices/nvidia/nvidia_kernel_common.cuh"
+#include "../cuda/kernel.cuh"
 #include "interpolate_nearest_nvidia.cuh"
 #include <cstddef>
 #include <cstdint>
 #include <cuda_bf16.h>
 
 namespace op::interpolate_nearest::nvidia {
-
-template <typename T>
-__global__ void interpolate_nearest_kernel(T *output, const T *input,
-                                           InterpolateNearestInfo info) {
-
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int total_elements =
-      info.batch_size * info.channels * info.output_height * info.output_width;
-
-  if (idx < total_elements) {
-    int temp = idx;
-    int w = temp % info.output_width;
-    temp /= info.output_width;
-    int h = temp % info.output_height;
-    temp /= info.output_height;
-    int c = temp % info.channels;
-    int b = temp / info.channels;
-
-    int input_h = min((size_t)floorf((float)h * (float)info.input_height /
-                                     (float)info.output_height),
-                      info.input_height - 1);
-    int input_w = min((size_t)floorf((float)w * (float)info.input_width /
-                                     (float)info.output_width),
-                      info.input_width - 1);
-
-    int input_idx = b * info.input_stride[0] + c * info.input_stride[1] +
-                    input_h * info.input_stride[2] +
-                    input_w * info.input_stride[3];
-
-    int output_idx = b * info.output_stride[0] + c * info.output_stride[1] +
-                     h * info.output_stride[2] + w * info.output_stride[3];
-
-    output[output_idx] = input[input_idx];
-  }
-}
 
 struct Descriptor::Opaque {
   std::shared_ptr<device::nvidia::Handle::Internal> internal;
@@ -80,27 +46,23 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
   auto cuda_stream = reinterpret_cast<cudaStream_t>(stream);
 
-  int total_elements = _info.batch_size * _info.channels * _info.output_height *
-                       _info.output_width;
+  size_t total_elements = calculate_total_elements(_info);
+
   int block_size = 256;
   int grid_size = (total_elements + block_size - 1) / block_size;
 
   switch (_dtype) {
   case INFINI_DTYPE_F32: {
-    float *typed_output = nullptr;
-    const float *typed_input = nullptr;
-    typed_output = reinterpret_cast<float *>(output);
-    typed_input = reinterpret_cast<const float *>(input);
+    float *typed_output = reinterpret_cast<float *>(output);
+    const float *typed_input = reinterpret_cast<const float *>(input);
     interpolate_nearest_kernel<float>
         <<<grid_size, block_size, 0, cuda_stream>>>(typed_output, typed_input,
                                                     _info);
   } break;
 
   case INFINI_DTYPE_F16: {
-    half *typed_output = nullptr;
-    const half *typed_input = nullptr;
-    typed_output = reinterpret_cast<half *>(output);
-    typed_input = reinterpret_cast<const half *>(input);
+    half *typed_output = reinterpret_cast<half *>(output);
+    const half *typed_input = reinterpret_cast<const half *>(input);
     interpolate_nearest_kernel<half><<<grid_size, block_size, 0, cuda_stream>>>(
         typed_output, typed_input, _info);
   } break;
