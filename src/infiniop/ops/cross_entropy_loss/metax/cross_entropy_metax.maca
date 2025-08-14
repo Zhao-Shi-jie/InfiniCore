@@ -1,0 +1,102 @@
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
+#include "cross_entropy_metax.h"
+#include <hpcc_fp16.h>
+#include <math.h>
+#include <vector>
+#include <memory>
+
+#include "../cuda/kernel.cuh"
+
+namespace op::cross_entropy_loss::metax {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::metax::Handle::Internal> internal;
+    std::vector<size_t> logits_shape;
+    Opaque(std::shared_ptr<device::metax::Handle::Internal> internal_ptr)
+        : internal(internal_ptr) {}
+    ~Opaque() = default;
+};
+
+Descriptor::~Descriptor() {
+    if (_opaque) delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t loss_desc,
+    infiniopTensorDescriptor_t logits_desc,
+    infiniopTensorDescriptor_t target_desc) {
+
+    auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
+    auto dtype = logits_desc->dtype();
+    if (dtype != INFINI_DTYPE_F32 && dtype != INFINI_DTYPE_F16 && dtype != INFINI_DTYPE_BF16) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    const auto &logits_shape = logits_desc->shape();
+    if (logits_shape.size() < 2) return INFINI_STATUS_BAD_TENSOR_SHAPE;
+
+    auto opaque = new Opaque(handle->internal());
+    opaque->logits_shape = logits_shape;
+
+    long long total_elements = logits_shape[0];
+    for (size_t i = 2; i < logits_shape.size(); ++i)
+        total_elements *= logits_shape[i];
+
+    size_t workspace_size = total_elements * logits_shape[1] * sizeof(float);  // optional
+    *desc_ptr = new Descriptor(dtype, workspace_size, opaque, handle->device, handle->device_id);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename T_in, typename T_out>
+inline void launch_softmax_crossentropy(
+    T_out* loss, const T_in* logits, const int* target,
+    int N, int C, long long inner_size, hcStream_t stream) {
+
+    long long total_elements = static_cast<long long>(N) * inner_size;
+    dim3 blockSize(256);
+    dim3 gridSize((total_elements + blockSize.x - 1) / blockSize.x);
+
+    cross_entropy_loss_kernel<T_in><<<gridSize, blockSize, 0, stream>>>(
+        loss, logits, target, N, C, inner_size);
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace, size_t workspace_size, void *loss,
+    const void *logits, const void *target, void *stream_) const {
+
+    const auto &shape = _opaque->logits_shape;
+    if (shape.size() < 2) return INFINI_STATUS_BAD_TENSOR_SHAPE;
+
+    int N = shape[0];
+    int C = shape[1];
+    long long inner_size = 1;
+    for (size_t i = 2; i < shape.size(); ++i)
+        inner_size *= shape[i];
+
+    const int *typed_target = reinterpret_cast<const int *>(target);
+    hcStream_t stream = (hcStream_t)stream_;
+
+    if (_dtype == INFINI_DTYPE_F32) {
+        launch_softmax_crossentropy<float, float>(
+            (float*)loss, (const float*)logits, typed_target,
+            N, C, inner_size, stream);
+    } else if (_dtype == INFINI_DTYPE_F16) {
+        launch_softmax_crossentropy<half, half>(
+            (half*)loss, (const half*)logits, typed_target,
+            N, C, inner_size, stream);
+    } else if (_dtype == INFINI_DTYPE_BF16) {
+        launch_softmax_crossentropy<__hpcc_bfloat16, __hpcc_bfloat16>(
+            (__hpcc_bfloat16*)loss, (const __hpcc_bfloat16*)logits, typed_target,
+            N, C, inner_size, stream);
+    } else {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::cross_entropy_loss::metax

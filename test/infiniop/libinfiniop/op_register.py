@@ -594,42 +594,108 @@ def max_pool_backward_(lib):
     ]
 
 @OpRegister.operator
-def conv_backward_(lib):
-    lib.infiniopCreateConvBackwardDescriptor.restype = c_int32
-    lib.infiniopCreateConvBackwardDescriptor.argtypes = [
+def avg_pool_(lib):
+    lib.infiniopCreateAvgPoolDescriptor.restype = c_int32
+    lib.infiniopCreateAvgPoolDescriptor.argtypes = [
         infiniopHandle_t,
         POINTER(infiniopOperatorDescriptor_t),
-        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # output_desc
         infiniopTensorDescriptor_t,  # input_desc
-        infiniopTensorDescriptor_t,  # weight_desc
-        infiniopTensorDescriptor_t,  # bias_desc (can be None)
-        c_void_p,                    # pads
+        c_void_p,                    # kernel_size
         c_void_p,                    # strides
-        c_void_p,                    # dilations
-        c_size_t,                    # ndim
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
     ]
 
-    lib.infiniopGetConvBackwardWorkspaceSize.restype = c_int32
-    lib.infiniopGetConvBackwardWorkspaceSize.argtypes = [
+    lib.infiniopGetAvgPoolWorkspaceSize.restype = c_int32
+    lib.infiniopGetAvgPoolWorkspaceSize.argtypes = [
         infiniopOperatorDescriptor_t,
         POINTER(c_size_t),
     ]
 
-    lib.infiniopConvBackward.restype = c_int32
-    lib.infiniopConvBackward.argtypes = [
-        infiniopOperatorDescriptor_t,
-        c_void_p,      # workspace
-        c_size_t,      # workspace_size
-        c_void_p,      # grad_input
-        c_void_p,      # grad_weight
-        c_void_p,      # grad_bias
-        c_void_p,      # grad_output
-        c_void_p,      # input
-        c_void_p,      # weight
-        c_void_p,      # stream
+    lib.infiniopAvgPool.restype = c_int32
+    lib.infiniopAvgPool.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # output
+        c_void_p,                      # input
+        c_void_p,                      # stream
     ]
 
-    lib.infiniopDestroyConvBackwardDescriptor.restype = c_int32
-    lib.infiniopDestroyConvBackwardDescriptor.argtypes = [
+    lib.infiniopDestroyAvgPoolDescriptor.restype = c_int32
+    lib.infiniopDestroyAvgPoolDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]    
+
+@OpRegister.operator
+def avg_pool_backward_(lib):
+    lib.infiniopCreateAvgPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopCreateAvgPoolBackwardDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # grad_input_desc
+        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        c_void_p,                    # kernel_size
+        c_void_p,                    # strides
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
+    ]
+
+    lib.infiniopGetAvgPoolBackwardWorkspaceSize.restype = c_int32
+    lib.infiniopGetAvgPoolBackwardWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAvgPoolBackward.restype = c_int32
+    lib.infiniopAvgPoolBackward.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # grad_input
+        c_void_p,                      # grad_output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyAvgPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopDestroyAvgPoolBackwardDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def cross_entropy_loss_(lib):
+    lib.infiniopCreateCrossEntropyLossDescriptor.restype = c_int32
+    lib.infiniopCreateCrossEntropyLossDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # loss_desc
+        infiniopTensorDescriptor_t,  # logits_desc
+        infiniopTensorDescriptor_t,  # target_desc
+    ]
+
+    lib.infiniopGetCrossEntropyLossWorkspaceSize.restype = c_int32
+    lib.infiniopGetCrossEntropyLossWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopCrossEntropyLoss.restype = c_int32
+    lib.infiniopCrossEntropyLoss.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,    # workspace
+        c_size_t,    # workspace_size
+        c_void_p,    # loss
+        c_void_p,    # logits
+        c_void_p,    # target
+        c_void_p,    # stream
+    ]
+
+    lib.infiniopDestroyCrossEntropyLossDescriptor.restype = c_int32
+    lib.infiniopDestroyCrossEntropyLossDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+    

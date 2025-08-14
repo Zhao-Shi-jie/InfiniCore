@@ -47,7 +47,6 @@ _TOLERANCE_MAP = {
     InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-2},
 }
 
-
 def avg_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tensor):
     ndim = len(input_tensor.shape) - 2
     if ndim == 1:
@@ -60,7 +59,6 @@ def avg_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tenso
         raise ValueError(f"Unsupported spatial dimensions: {ndim}")
     output_tensor.copy_(result)
 
-
 def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
     def calc_output_size(input_size, k, s, p, ceil_mode):
         return math.ceil((input_size + 2 * p - k) / s + 1) if ceil_mode else math.floor((input_size + 2 * p - k) / s + 1)
@@ -68,11 +66,9 @@ def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
     output_spatial = [calc_output_size(spatial[i], kernel_size[i], stride[i], padding[i], ceil_mode) for i in range(len(spatial))]
     return (batch, channel) + tuple(output_spatial)
 
-
 def tuple_to_void_p(py_tuple: Tuple):
     arr = (ctypes.c_uint64 * len(py_tuple))(*py_tuple)
     return ctypes.cast(arr, ctypes.c_void_p)
-
 
 def test(handle, device, input_shape, input_stride, kernel_size, stride, padding, ceil_mode, tensor_dtype=InfiniDtype.F16, sync=None):
     input_tensor = TestTensor(input_shape, input_stride, dt=tensor_dtype, device=device, scale=1.0)
@@ -101,8 +97,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
         if tensor: tensor.destroy_desc()
 
     workspace_size = ctypes.c_uint64(0)
-    check_error(LIBINFINIOP.infiniopGetAvgPoolWorkspaceSize(descriptor, ctypes.byref(workspace_size))
-    )
+    check_error(LIBINFINIOP.infiniopGetAvgPoolWorkspaceSize(descriptor, ctypes.byref(workspace_size)))
     workspace = TestWorkspace(workspace_size.value, output_tensor.device)
 
     def lib_avg_pool():
@@ -128,7 +123,6 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
         profile_operation("    lib", lib_avg_pool, device, NUM_PRERUN, NUM_ITERATIONS)
 
     check_error(LIBINFINIOP.infiniopDestroyAvgPoolDescriptor(descriptor))
-
 
 if __name__ == "__main__":
     args = get_args()

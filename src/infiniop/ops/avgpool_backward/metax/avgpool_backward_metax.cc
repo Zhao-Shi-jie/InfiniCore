@@ -1,6 +1,6 @@
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
-#include "maxpool_backward_metax.h"
+#include "avgpool_backward_metax.h"
 
 #define DESTROY_HCDNN_DESCRIPTOR(desc_ptr, destroy_func)                       \
   do {                                                                         \
@@ -19,7 +19,7 @@
                              hcdnnDestroyPoolingDescriptor);                   \
   } while (0)
 
-namespace op::maxpool_backward::metax {
+namespace op::avgpool_backward::metax {
 
 struct Descriptor::Opaque {
   std::shared_ptr<device::metax::Handle::Internal> internal;
@@ -45,7 +45,7 @@ private:
     }
   }
 
-  infiniStatus_t createPoolingDescriptors(const MaxPoolBackwardInfo &info,
+  infiniStatus_t createPoolingDescriptors(const AvgPoolBackwardInfo &info,
                                          hcdnnDataType_t hcdnn_data_type) {
     // 创建hcdnn描述符
     CHECK_MCDNN(hcdnnCreateTensorDescriptor(&input_desc));
@@ -65,7 +65,7 @@ private:
 
     // 1D池化补充维度
     if (info.ndim == 1) {
-            input_dims_vec.push_back(1);
+      input_dims_vec.push_back(1);
       output_dims_vec.push_back(1);
     }
 
@@ -91,7 +91,7 @@ private:
     return INFINI_STATUS_SUCCESS;
   }
 
-  infiniStatus_t setupPoolingDescriptor(const MaxPoolBackwardInfo &info) {
+  infiniStatus_t setupPoolingDescriptor(const AvgPoolBackwardInfo &info) {
     // 构建池化参数
     std::vector<int> kernel_vec, stride_vec, pad_vec;
     for (size_t i = 0; i < info.ndim; ++i) {
@@ -107,10 +107,11 @@ private:
       pad_vec.push_back(0);
     }
 
-    // 设置最大池化反向描述符（确定性模式）
+    // 设置平均池化反向描述符
     CHECK_MCDNN(hcdnnSetPoolingNdDescriptor(
-        pooling_backward_desc, HCDNN_POOLING_MAX_DETERMINISTIC,  // 确定性最大池化
-        HCDNN_NOT_PROPAGATE_NAN,                              // 不传播NaN
+        pooling_backward_desc, 
+        HCDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING, // 平均池化模式
+        HCDNN_NOT_PROPAGATE_NAN,                     // 不传播NaN
         kernel_vec.size(),
         kernel_vec.data(),
         pad_vec.data(),
@@ -119,14 +120,14 @@ private:
     return INFINI_STATUS_SUCCESS;
   }
 
-  infiniStatus_t initializeHcdnnContext(MaxPoolBackwardInfo &info,
+  infiniStatus_t initializeHcdnnContext(AvgPoolBackwardInfo &info,
                                         infiniDtype_t data_type) {
     hcdnnDataType_t hcdnn_data_type = device::metax::getHcdnnDtype(data_type);
 
     CHECK_STATUS(createPoolingDescriptors(info, hcdnn_data_type));
     CHECK_STATUS(setupPoolingDescriptor(info));
 
-    // 计算工作空间大小（需存储前向输出用于反向计算）
+    // 计算工作空间大小（需要存储前向输出用于反向计算）
     CHECK_MCDNN(hcdnnGetTensorSizeInBytes(grad_output_desc, &workspace_size));
 
     return INFINI_STATUS_SUCCESS;
@@ -161,7 +162,7 @@ public:
 
   static inline utils::Result<Opaque>
   create(std::shared_ptr<device::metax::Handle::Internal> internal_ptr,
-         MaxPoolBackwardInfo &info, infiniDtype_t data_type) {
+         AvgPoolBackwardInfo &info, infiniDtype_t data_type) {
 #ifdef ENABLE_HCDNN_API
     Opaque opaque(internal_ptr);
     auto status = opaque.initializeHcdnnContext(info, data_type);
@@ -196,7 +197,7 @@ infiniStatus_t Descriptor::create(infiniopHandle_t handle_,
   CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
 
   auto result =
-      MaxPoolBackwardInfo::create(grad_input_desc, grad_output_desc, input_desc,
+      AvgPoolBackwardInfo::create(grad_input_desc, grad_output_desc, input_desc,
                                   kernel_size, strides, pads, ceil_mode);
   CHECK_RESULT(result);
   auto info = result.take();
@@ -227,23 +228,23 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
   CHECK_STATUS(_opaque->internal->useMcdnn(
       (hcStream_t)stream, [&](hcdnnHandle_t handle) {
-        // size_t grad_input_size = 0;
-        // CHECK_MCDNN(hcdnnGetTensorSizeInBytes(_opaque->grad_input_desc, &grad_input_size));
-        // CHECK_HC(hcMemset(grad_input, 0, grad_input_size));
-        // CHECK_HC(hcMemset(workspace, 0, _workspace_size));
-
         void *temp_output = workspace;
+        
+        // 1. 执行前向平均池化计算（结果存入workspace）
         CHECK_MCDNN(hcdnnPoolingForward(
             handle, _opaque->pooling_backward_desc, &alpha,
-            _opaque->input_desc, input, &beta, _opaque->grad_output_desc, temp_output));
+            _opaque->input_desc, input, 
+            &beta, 
+            _opaque->grad_output_desc, temp_output));
 
+        // 2. 执行反向传播（需要前向输出计算梯度分配）
         CHECK_MCDNN(hcdnnPoolingBackward(
             handle, _opaque->pooling_backward_desc, &alpha,
-            _opaque->grad_output_desc, temp_output,  // 前向输出（用于定位最大值）
+            _opaque->grad_output_desc, temp_output,  // 前向输出
             _opaque->grad_output_desc, grad_output,  // 输出梯度
             _opaque->input_desc, input,             // 前向输入
             &beta,
-            _opaque->grad_input_desc, grad_input     // 输入梯度（输出）
+            _opaque->grad_input_desc, grad_input     // 输入梯度
         ));
         return INFINI_STATUS_SUCCESS;
       }));
@@ -253,4 +254,4 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #endif
 }
 
-} // namespace op::maxpool_backward::metax
+} // namespace op::avgpool_backward::metax

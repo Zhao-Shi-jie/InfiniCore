@@ -1,6 +1,6 @@
 local CUDNN_ROOT = os.getenv("CUDNN_ROOT") or os.getenv("CUDNN_HOME") or os.getenv("CUDNN_PATH")
 if CUDNN_ROOT ~= nil then
-    add_includedirs(CUDNN_ROOT .. "/include")
+    add_includedirs(CUDNN_ROOT .. "/include", {public = true})
 end
 
 target("infiniop-nvidia")

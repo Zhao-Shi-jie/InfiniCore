@@ -19,4 +19,8 @@
 #include "infiniop/ops/swiglu.h"
 #include "infiniop/tensor_descriptor.h"
 
+#include "infiniop/ops/cross_entropy_loss.h"
+#include "infiniop/ops/avg_pool.h"
+#include "infiniop/ops/avgpool_backward.h"
+
 #endif // __INFINIOP_API_H__
