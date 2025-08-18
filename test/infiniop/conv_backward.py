@@ -31,15 +31,24 @@ NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
 _TEST_CASES = [
-    # x_shape, x_stride, w_shape, w_stride, pads, strides, dilations
-    ((2, 3, 16), (48, 16, 1), (4, 3, 5), (15, 5, 1), (2,), (1,), (1,)),  # 1D
-    ((1, 1, 32), (32, 32, 1), (1, 1, 3), (3, 3, 1), (1,), (2,), (1,)),   # 1D
-    ((4, 3, 16, 16), (768, 256, 16, 1), (8, 3, 5, 5), (75, 25, 5, 1), (2, 2), (1, 1), (1, 1)),  # 2D
-    ((2, 8, 32, 32), (8192, 1024, 32, 1), (16, 8, 3, 3), (72, 9, 3, 1), (1, 1), (2, 2), (1, 1)),  # 2D
-    ((1, 1, 10, 10), (100, 100, 10, 1), (1, 1, 5, 5), (25, 25, 5, 1), (0, 0), (1, 1), (1, 1)),  # 2D
-    ((2, 3, 8, 8, 8), (1536, 512, 64, 8, 1), (4, 3, 3, 3, 3), (81, 27, 9, 3, 1), (1, 1, 1), (2, 2, 2), (1, 1, 1)),  # 3D
-    ((1, 1, 16, 16, 16), (4096, 4096, 256, 16, 1), (2, 1, 5, 5, 5), (125, 125, 25, 5, 1), (2, 2, 2), (2, 2, 2), (1, 1, 1)),  # 3D
-    ((4, 2, 8, 8, 8), (1024, 512, 64, 8, 1), (2, 2, 3, 3, 3), (54, 27, 9, 3, 1), (1, 1, 1), (1, 1, 1), (1, 1, 1)),  # 3D
+    # 1D Conv Backward Tests
+    # x_shape, x_stride, w_shape, w_stride, pads, strides, dilations, group
+    ((2, 4, 16), (64, 16, 1), (8, 4, 5), (20, 5, 1), (0,), (1,), (1,), 1),
+    ((2, 4, 32), (128, 32, 1), (8, 4, 3), (12, 3, 1), (1,), (2,), (1,), 1),
+    ((1, 2, 64), (128, 64, 1), (4, 2, 7), (14, 7, 1), (2,), (3,), (1,), 1),
+
+    # 2D Conv Backward Tests
+    ((2, 3, 16, 16), (768, 256, 16, 1), (6, 3, 3, 3), (27, 9, 3, 1), (0, 1), (1, 2), (2, 2), 1),
+    ((1, 4, 32, 32), (4096, 1024, 32, 1), (8, 4, 5, 5), (100, 25, 5, 1), (2, 0), (2, 1), (1, 1), 1),
+    ((1, 2, 64, 32), (4096, 2048, 32, 1), (4, 2, 7, 3), (42, 21, 3, 1), (1, 2), (3, 2), (1, 1), 1),
+
+    # 3D Conv Backward Tests
+    ((1, 2, 8, 8, 8), (1024, 512, 64, 8, 1), (4, 2, 3, 3, 3), (54, 27, 9, 3, 1), (0, 1, 2), (1, 2, 1), (1, 1, 1), 1),
+    ((1, 4, 16, 16, 16), (16384, 4096, 256, 16, 1), (8, 4, 5, 5, 5), (500, 125, 25, 5, 1), (2, 0, 1), (2, 1, 3), (1, 1, 1), 1),
+    ((1, 2, 32, 16, 8), (8192, 4096, 128, 8, 1), (4, 2, 7, 3, 5), (210, 105, 15, 5, 1), (1, 2, 0), (3, 2, 1), (1, 1, 1), 1),
+
+    # Grouped convolution test case
+    ((2, 4, 16), (64, 16, 1), (4, 2, 3), (6, 3, 1), (1,), (1,), (1,), 2),
 ]
 
 def inferShapeStride(
@@ -72,7 +81,7 @@ def inferShapeStride(
     return output_shape, output_strides
 
 def tuple_to_void_p(py_tuple: Tuple):
-    array = ctypes.c_int64 * len(py_tuple)
+    array = ctypes.c_int * len(py_tuple)
     data_array = array(*py_tuple)
     return ctypes.cast(data_array, ctypes.c_void_p)
 
@@ -86,6 +95,7 @@ def test(
     pads,
     strides,
     dilations,
+    groups,
     tensor_dtype=InfiniDtype.F16,
     sync=None,
 ):
@@ -96,10 +106,8 @@ def test(
     #grad_output = TestTensor(output_shape, output_stride, dt=tensor_dtype, device=device)
     bias = (
         TestTensor((weight.shape[0],), (1,), dt=tensor_dtype, device=device, scale=0.01)
-        if weight.shape[0] > 1
-        else None
     )
-    bias = None  # Disable bias for now
+    # bias = None  # Disable bias for now
     # 1. PyTorch reference backward
     input_torch = input.torch_tensor().detach().clone().requires_grad_(True)
     weight_torch = weight.torch_tensor().detach().clone().requires_grad_(True)
@@ -107,11 +115,11 @@ def test(
     grad_output_torch = torch.randn(output_shape, dtype=input_torch.dtype, device=input_torch.device)
     # Forward
     if len(input_shape) == 3:
-        y_ref = torch.nn.functional.conv1d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations)
+        y_ref = torch.nn.functional.conv1d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
     elif len(input_shape) == 4:
-        y_ref = torch.nn.functional.conv2d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations)
+        y_ref = torch.nn.functional.conv2d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
     elif len(input_shape) == 5:
-        y_ref = torch.nn.functional.conv3d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations)
+        y_ref = torch.nn.functional.conv3d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
     else:
         raise NotImplementedError("Unsupported ndim")
     print(f"PyTorch output shape: {y_ref.shape}, dtype: {y_ref.dtype}, device: {y_ref.device}")
@@ -145,7 +153,7 @@ def test(
             tuple_to_void_p(pads),
             tuple_to_void_p(strides),
             tuple_to_void_p(dilations),
-            1,
+            groups,
         )
     )
 

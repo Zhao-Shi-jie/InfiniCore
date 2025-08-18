@@ -1,7 +1,52 @@
 #include "../../../devices/nvidia/nvidia_common.cuh"
 #include "../../../devices/nvidia/nvidia_handle.cuh"
+#include "../cuda/bias_grad_kernel.cuh"
 #include "../info.h"
 #include "conv_backward_nvidia.cuh"
+
+// 启动 kernel 的辅助函数
+infiniStatus_t launch_bias_grad_kernel(const void *grad_output, void *grad_bias,
+                                       const int *grad_output_dims,
+                                       size_t conv_ndim,
+                                       cudnnDataType_t data_type,
+                                       cudaStream_t stream) {
+
+  int batch_size = grad_output_dims[0];
+  int channels = grad_output_dims[1];
+  int spatial_size = 1;
+
+  switch (conv_ndim) {
+  case 1:
+    spatial_size = grad_output_dims[2];
+    break;
+  case 2:
+    spatial_size = grad_output_dims[2] * grad_output_dims[3];
+    break;
+  case 3:
+    spatial_size =
+        grad_output_dims[2] * grad_output_dims[3] * grad_output_dims[4];
+    break;
+  default:
+    printf("ERROR: Unsupported convolution dimension: %zu\n", conv_ndim);
+    return INFINI_STATUS_BAD_PARAM;
+  }
+
+  dim3 block(256);
+  dim3 grid((channels + block.x - 1) / block.x);
+
+  compute_bias_grad_kernel<<<grid, block, 0, stream>>>(
+      grad_output, grad_bias, batch_size, channels, spatial_size, data_type);
+
+  // 检查 kernel 启动错误
+  cudaError_t launch_error = cudaGetLastError();
+  if (launch_error != cudaSuccess) {
+    printf("ERROR: Kernel launch failed: %s\n",
+           cudaGetErrorString(launch_error));
+    return INFINI_STATUS_INTERNAL_ERROR;
+  }
+
+  return INFINI_STATUS_SUCCESS;
+}
 
 #define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func)                       \
   do {                                                                         \
@@ -41,6 +86,7 @@ struct Descriptor::Opaque {
   cudnnConvolutionBwdFilterAlgo_t bwd_filter_algo;
   size_t bwd_data_workspace_size = 0;
   size_t bwd_filter_workspace_size = 0;
+  size_t conv_ndim = 0;
 #endif
 
 private:
@@ -92,8 +138,9 @@ private:
         calculateStrides(ndim, grad_output_dims.data(), grad_output_strides));
 
     // weight
+    size_t in_channels_per_group = info.in_channels / info.groups;
     std::vector<int> weight_dims = {static_cast<int>(info.out_channels),
-                                    static_cast<int>(info.in_channels)};
+                                    static_cast<int>(in_channels_per_group)};
     for (size_t i = 0; i < info.ndim; ++i)
       weight_dims.push_back(static_cast<int>(info.weight_dims[i]));
 
@@ -263,6 +310,8 @@ private:
     workspace_size =
         std::max(bwd_data_workspace_size, bwd_filter_workspace_size);
 
+    conv_ndim = info.ndim;
+
     return INFINI_STATUS_SUCCESS;
   }
 #endif
@@ -280,7 +329,8 @@ public:
         bwd_data_algo(other.bwd_data_algo),
         bwd_filter_algo(other.bwd_filter_algo),
         bwd_data_workspace_size(other.bwd_data_workspace_size),
-        bwd_filter_workspace_size(other.bwd_filter_workspace_size)
+        bwd_filter_workspace_size(other.bwd_filter_workspace_size),
+        conv_ndim(other.conv_ndim)
 #endif
   {
 #ifdef ENABLE_CUDNN_API
@@ -295,6 +345,7 @@ public:
     other.bwd_filter_algo = static_cast<cudnnConvolutionBwdFilterAlgo_t>(0);
     other.bwd_data_workspace_size = 0;
     other.bwd_filter_workspace_size = 0;
+    other.conv_ndim = 0;
 #endif
     other.workspace_size = 0;
   }
@@ -379,22 +430,11 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
       return INFINI_STATUS_BAD_PARAM;
     }
 
-    // printf("Executing cudnnConvolutionBackwardData with algo %d, "
-    //        "workspace_size %zu\n",
-    //        static_cast<int>(_opaque->bwd_data_algo),
-    //        _opaque->bwd_data_workspace_size);
-
     CHECK_CUDNN(cudnnConvolutionBackwardData(
         h, &alpha, _opaque->weight_desc, weight, _opaque->grad_output_desc,
         grad_output, _opaque->conv_desc, _opaque->bwd_data_algo, workspace,
         _opaque->bwd_data_workspace_size, &beta, _opaque->grad_input_desc,
         grad_input));
-
-    // grad_weight = conv_bwd_filter(input, grad_output)
-    // printf("Executing cudnnConvolutionBackwardFilter with algo %d, "
-    //        "workspace_size %zu\n",
-    //        static_cast<int>(_opaque->bwd_filter_algo),
-    //        _opaque->bwd_filter_workspace_size);
 
     CHECK_CUDNN(cudnnConvolutionBackwardFilter(
         h, &alpha, _opaque->input_desc, input, _opaque->grad_output_desc,
@@ -404,9 +444,24 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
     // grad_bias = conv_bwd_bias(grad_output)
     if (_opaque->grad_bias_desc && grad_bias) {
-      CHECK_CUDNN(cudnnConvolutionBackwardBias(
-          h, &alpha, _opaque->grad_output_desc, grad_output, &beta,
-          _opaque->grad_bias_desc, grad_bias));
+      cudnnDataType_t grad_output_type;
+      int grad_output_nbDims;
+      int grad_output_dims[5], grad_output_strides[5];
+
+      int query_ndim = (_opaque->conv_ndim == 3) ? 5 : 4;
+
+      cudnnStatus_t status1 = cudnnGetTensorNdDescriptor(
+          _opaque->grad_output_desc, query_ndim, &grad_output_type,
+          &grad_output_nbDims, grad_output_dims, grad_output_strides);
+      if (grad_output_type == CUDNN_DATA_BFLOAT16) {
+        CHECK_STATUS(launch_bias_grad_kernel(
+            grad_output, grad_bias, grad_output_dims, _opaque->conv_ndim,
+            grad_output_type, (cudaStream_t)stream));
+      } else {
+        CHECK_CUDNN(cudnnConvolutionBackwardBias(
+            h, &alpha, _opaque->grad_output_desc, grad_output, &beta,
+            _opaque->grad_bias_desc, grad_bias));
+      }
     }
     return INFINI_STATUS_SUCCESS;
   });

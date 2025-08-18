@@ -38,7 +38,6 @@ public:
         info.in_channels = input_desc->dim(1);
         info.out_channels = weight_desc->dim(0);
         info.groups = groups;
-
         // 校验维度
         if (input_desc->ndim() != weight_desc->ndim() || input_desc->ndim() != grad_output_desc->ndim()) {
             return INFINI_STATUS_BAD_TENSOR_SHAPE;
@@ -53,15 +52,16 @@ public:
             info.grad_output_dims.push_back(grad_output_desc->dim(i));
         }
 
-        auto pad_ptr = reinterpret_cast<const size_t *>(pads);
-        auto stride_ptr = reinterpret_cast<const size_t *>(strides);
-        auto dilation_ptr = reinterpret_cast<const size_t *>(dilations);
-        for (size_t i = 0; i < info.ndim; ++i) {
-            info.pads.push_back(pad_ptr ? pad_ptr[i] : 0);
-            info.strides.push_back(stride_ptr ? stride_ptr[i] : 1);
-            info.dilations.push_back(dilation_ptr ? dilation_ptr[i] : 1);
-        }
+        // 修复：正确的类型转换
+        auto pad_ptr = reinterpret_cast<const int *>(pads);
+        auto stride_ptr = reinterpret_cast<const int *>(strides);
+        auto dilation_ptr = reinterpret_cast<const int *>(dilations);
 
+        for (size_t i = 0; i < info.ndim; ++i) {
+            info.pads.push_back(pad_ptr ? static_cast<size_t>(pad_ptr[i]) : 0);
+            info.strides.push_back(stride_ptr ? static_cast<size_t>(stride_ptr[i]) : 1);
+            info.dilations.push_back(dilation_ptr ? static_cast<size_t>(dilation_ptr[i]) : 1);
+        }
         return utils::Result<ConvBackwardInfo>(std::move(info));
     }
 };
