@@ -31,6 +31,14 @@ NUM_ITERATIONS = 1000
 
 # Test cases: (input_shape, input_stride, kernel_size, stride, padding, ceil_mode)
 _TEST_CASES = [
+    (
+        (3, 2, 77),        # input_shape: N=1, C=3, L=8
+        None,             # Use default contiguous strides  
+        (6,),             # kernel_size
+        (4,),             # stride
+        (3,),             # padding
+        True,            # ceil_mode
+    ),
     # 1D max pooling cases
     (
         (1, 3, 8),        # input_shape: N=1, C=3, L=8
