@@ -1,4 +1,4 @@
-#include "infinirt_musa.h"
+#include "infinirt_moore.h"
 #include "../../utils.h"
 #include <musa_runtime.h>
 #include <musa_runtime_api.h>

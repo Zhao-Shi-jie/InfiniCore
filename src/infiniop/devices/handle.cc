@@ -15,7 +15,7 @@
 #include "ascend/ascend_handle.h"
 #endif
 #ifdef ENABLE_MOORE_API
-#include "musa/musa_handle.h"
+#include "moore/moore_handle.h"
 #endif
 #ifdef ENABLE_KUNLUN_API
 #include "kunlun/kunlun_handle.h"
@@ -54,7 +54,7 @@ __C infiniStatus_t infiniopCreateHandle(infiniopHandle_t *handle_ptr) {
         CREATE(INFINI_DEVICE_ASCEND, ascend);
 #endif
 #ifdef ENABLE_MOORE_API
-        CREATE(INFINI_DEVICE_MOORE, musa);
+        CREATE(INFINI_DEVICE_MOORE, moore);
 #endif
 #ifdef ENABLE_KUNLUN_API
         CREATE(INFINI_DEVICE_KUNLUN, kunlun);
@@ -94,7 +94,7 @@ __C infiniStatus_t infiniopDestroyHandle(infiniopHandle_t handle) {
         DELETE(INFINI_DEVICE_ASCEND, ascend);
 #endif
 #ifdef ENABLE_MOORE_API
-        DELETE(INFINI_DEVICE_MOORE, musa);
+        DELETE(INFINI_DEVICE_MOORE, moore);
 #endif
 #ifdef ENABLE_KUNLUN_API
         DELETE(INFINI_DEVICE_KUNLUN, kunlun);

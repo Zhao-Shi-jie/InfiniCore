@@ -1,10 +1,10 @@
-#ifndef __INFINIOP_MUSA_HANDLE_H__
-#define __INFINIOP_MUSA_HANDLE_H__
+#ifndef __INFINIOP_MOORE_HANDLE_H__
+#define __INFINIOP_MOORE_HANDLE_H__
 
 #include "../../handle.h"
 #include <memory>
 
-namespace device::musa {
+namespace device::moore {
 struct Handle : public InfiniopHandle {
     Handle(int device_id);
     class Internal;
@@ -20,6 +20,6 @@ private:
     std::shared_ptr<Internal> _internal;
 };
 
-} // namespace device::musa
+} // namespace device::moore
 
-#endif // __INFINIOP_MUSA_HANDLE_H__
+#endif // __INFINIOP_MOORE_HANDLE_H__

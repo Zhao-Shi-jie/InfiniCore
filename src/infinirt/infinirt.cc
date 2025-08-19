@@ -6,7 +6,7 @@
 #include "cuda/infinirt_cuda.cuh"
 #include "kunlun/infinirt_kunlun.h"
 #include "metax/infinirt_metax.h"
-#include "musa/infinirt_musa.h"
+#include "moore/infinirt_moore.h"
 
 thread_local infiniDevice_t CURRENT_DEVICE_TYPE = INFINI_DEVICE_CPU;
 thread_local int CURRENT_DEVICE_ID = 0;
@@ -23,6 +23,10 @@ __C infiniStatus_t infinirtGetAllDeviceCount(int *count_array) {
         return INFINI_STATUS_NULL_POINTER;
     }
     for (size_t i = 0; i < INFINI_DEVICE_TYPE_COUNT; i++) {
+        if (i == INFINI_DEVICE_ILUVATAR || i == INFINI_DEVICE_KUNLUN || i == INFINI_DEVICE_SUGON) {
+            count_array[i] = 0;
+            continue;
+        }
         auto status = infinirtGetDeviceCount(static_cast<infiniDevice_t>(i), &count_array[i]);
         if (status != INFINI_STATUS_SUCCESS) {
             return status;

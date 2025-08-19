@@ -1,6 +1,6 @@
 #include "../../../utils.h"
 #include "../pool.h"
-#include "musa_handle.h"
+#include "moore_handle.h"
 #include <mublas.h>
 #include <mudnn.h>
 #include <musa.h>
@@ -10,7 +10,7 @@
 #define CHECK_MUBLAS(API) CHECK_INTERNAL(API, MUBLAS_STATUS_SUCCESS)
 #define CHECK_MUDNN(API) CHECK_INTERNAL((int)API, (int)::musa::dnn::Status::SUCCESS)
 
-namespace device::musa {
+namespace device::moore {
 
 class Handle::Internal {
     Pool<std::unique_ptr<mublasHandle_t>> mublas_handles;
@@ -39,4 +39,4 @@ public:
     int gridSizeZ() const;
 };
 
-} // namespace device::musa
+} // namespace device::moore
