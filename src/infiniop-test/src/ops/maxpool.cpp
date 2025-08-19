@@ -4,7 +4,7 @@
 #include <iomanip>
 #include <iostream>
 
-namespace infiniop_test::max_pool {
+namespace infiniop_test::maxpool {
 
 struct Test::Attributes {
     // 输入张量
@@ -23,13 +23,58 @@ std::shared_ptr<Test> Test::build(
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors,
     double rtol, double atol) {
 
-    std::cout << "DEBUG: max_pool::Test::build called" << std::endl;
+    std::cout << "DEBUG: maxpool::Test::build called" << std::endl;
 
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
 
     if (!check_names(attributes, Test::attribute_names()) || !check_names(tensors, Test::tensor_names())) {
         throw std::runtime_error("Invalid Test");
+    }
+    auto input_tensor = tensors["input"];
+    if (input_tensor->ggml_type() == GGML_TYPE_BF16) {
+        std::cout << "\n===== C++ Read BF16 Tensor (shape: ";
+        for (size_t i = 0; i < input_tensor->shape().size(); ++i) {
+            if (i > 0) {
+                std::cout << ", ";
+            }
+            std::cout << input_tensor->shape()[i];
+        }
+        std::cout << ") =====" << std::endl;
+
+        // 获取原始数据（BF16以uint16_t存储）
+        const uint16_t *data_ptr = reinterpret_cast<const uint16_t *>(input_tensor->data());
+
+        // 计算数据元素总数
+        size_t total_elements = 1;
+        for (auto dim : input_tensor->shape()) {
+            total_elements *= dim;
+        }
+
+        // 取前10个元素打印（与Python对应）
+        size_t print_count = std::min(total_elements, static_cast<size_t>(10));
+        for (size_t i = 0; i < print_count; ++i) {
+            uint16_t bf16_val = data_ptr[i];
+
+            // 将BF16转换为float
+            // BF16格式：1位符号位 + 8位指数 + 7位尾数位
+            // 转换方法：将BF16的16位扩展为float的32位
+            uint32_t float_bits = static_cast<uint32_t>(bf16_val) << 16;
+
+            // 使用union避免strict-aliasing警告
+            union {
+                uint32_t bits;
+                float value;
+            } converter;
+            converter.bits = float_bits;
+            float float_val = converter.value;
+
+            std::cout << "Index " << i << ": 十进制=" << std::fixed << std::setprecision(6)
+                      << float_val << ", 十六进制=0x" << std::hex << std::setw(4) << std::setfill('0')
+                      << bf16_val << std::dec << std::endl;
+        }
+        std::cout << "=================================================\n"
+                  << std::endl;
     }
 
     test->_attributes->input = tensors["input"];
@@ -343,4 +388,4 @@ Test::~Test() {
     delete _attributes;
 }
 
-} // namespace infiniop_test::max_pool
+} // namespace infiniop_test::maxpool

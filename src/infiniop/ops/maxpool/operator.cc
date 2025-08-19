@@ -1,12 +1,12 @@
 #include "../../operator.h"
 #include "../../handle.h"
-#include "infiniop/ops/max_pool.h"
+#include "infiniop/ops/maxpool.h"
 
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
-#include "nvidia/max_pool_nvidia.cuh"
+#include "nvidia/maxpool_nvidia.cuh"
 #endif
 #ifdef ENABLE_METAX_API
-#include "metax/max_pool_metax.h"
+#include "metax/maxpool_metax.h"
 #endif
 
 __C infiniStatus_t infiniopCreateMaxPoolDescriptor(
@@ -19,16 +19,16 @@ __C infiniStatus_t infiniopCreateMaxPoolDescriptor(
     void *pads,
     bool ceil_mode) {
 
-#define CREATE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                  \
-        return op::max_pool::NAMESPACE::Descriptor::create(                     \
-            handle,                                                             \
-            reinterpret_cast<op::max_pool::NAMESPACE::Descriptor **>(desc_ptr), \
-            output_desc,                                                        \
-            input_desc,                                                         \
-            kernel_size,                                                        \
-            strides,                                                            \
-            pads,                                                               \
+#define CREATE(CASE, NAMESPACE)                                                \
+    case CASE:                                                                 \
+        return op::maxpool::NAMESPACE::Descriptor::create(                     \
+            handle,                                                            \
+            reinterpret_cast<op::maxpool::NAMESPACE::Descriptor **>(desc_ptr), \
+            output_desc,                                                       \
+            input_desc,                                                        \
+            kernel_size,                                                       \
+            strides,                                                           \
+            pads,                                                              \
             ceil_mode)
 
     switch (handle->device) {
@@ -54,9 +54,9 @@ __C infiniStatus_t infiniopGetMaxPoolWorkspaceSize(
     infiniopMaxPoolDescriptor_t desc,
     size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                                          \
-    case CASE:                                                                                        \
-        *size = reinterpret_cast<const op::max_pool::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
+#define GET(CASE, NAMESPACE)                                                                         \
+    case CASE:                                                                                       \
+        *size = reinterpret_cast<const op::maxpool::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
@@ -86,12 +86,12 @@ __C infiniStatus_t infiniopMaxPool(
     const void *input,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                     \
-        return reinterpret_cast<const op::max_pool::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size,                                 \
-                        output,                                                    \
-                        input,                                                     \
+#define CALCULATE(CASE, NAMESPACE)                                                \
+    case CASE:                                                                    \
+        return reinterpret_cast<const op::maxpool::NAMESPACE::Descriptor *>(desc) \
+            ->calculate(workspace, workspace_size,                                \
+                        output,                                                   \
+                        input,                                                    \
                         stream)
 
     switch (desc->device_type) {
@@ -115,9 +115,9 @@ __C infiniStatus_t infiniopMaxPool(
 
 __C infiniStatus_t infiniopDestroyMaxPoolDescriptor(infiniopMaxPoolDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                     \
-    case CASE:                                                                      \
-        delete reinterpret_cast<const op::max_pool::NAMESPACE::Descriptor *>(desc); \
+#define DELETE(CASE, NAMESPACE)                                                    \
+    case CASE:                                                                     \
+        delete reinterpret_cast<const op::maxpool::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS;
 
     switch (desc->device_type) {

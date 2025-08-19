@@ -6,7 +6,7 @@
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \
-    namespace op::max_pool::NAMESPACE {                          \
+    namespace op::maxpool::NAMESPACE {                           \
     class Descriptor final : public InfiniopDescriptor {         \
         struct Opaque;                                           \
         Opaque *_opaque;                                         \

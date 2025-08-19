@@ -18,7 +18,7 @@ DECLARE_INFINIOP_TEST(rearrange)
 DECLARE_INFINIOP_TEST(sub)
 DECLARE_INFINIOP_TEST(interpolate_nearest)
 DECLARE_INFINIOP_TEST(conv_backward)
-DECLARE_INFINIOP_TEST(max_pool)
+DECLARE_INFINIOP_TEST(maxpool)
 
 #define REGISTER_INFINIOP_TEST(name)                      \
     {                                                     \
@@ -48,7 +48,7 @@ DECLARE_INFINIOP_TEST(max_pool)
         REGISTER_INFINIOP_TEST(sub)                 \
         REGISTER_INFINIOP_TEST(interpolate_nearest) \
         REGISTER_INFINIOP_TEST(conv_backward)       \
-        REGISTER_INFINIOP_TEST(max_pool)            \
+        REGISTER_INFINIOP_TEST(maxpool)             \
     }
 
 namespace infiniop_test {

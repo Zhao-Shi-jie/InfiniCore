@@ -6,7 +6,7 @@
 #include "../../tensor.h"
 #include <vector>
 
-namespace op::max_pool {
+namespace op::maxpool {
 
 inline utils::Result<size_t> calculateMaxPoolOutputSize(
     size_t input_size,
@@ -102,6 +102,6 @@ public:
         return utils::Result<MaxPoolInfo>(std::move(info));
     }
 };
-} // namespace op::max_pool
+} // namespace op::maxpool
 
 #endif // __MAX_POOL_INFO_H__

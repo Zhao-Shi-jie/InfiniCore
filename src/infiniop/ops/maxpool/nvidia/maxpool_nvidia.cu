@@ -1,6 +1,6 @@
 #include "../../../devices/nvidia/nvidia_common.cuh"
 #include "../../../devices/nvidia/nvidia_handle.cuh"
-#include "max_pool_nvidia.cuh"
+#include "maxpool_nvidia.cuh"
 
 #define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func)                       \
   do {                                                                         \
@@ -17,7 +17,7 @@
     DESTROY_CUDNN_DESCRIPTOR(pooling_desc, cudnnDestroyPoolingDescriptor);     \
   } while (0)
 
-namespace op::max_pool::nvidia {
+namespace op::maxpool::nvidia {
 
 struct Descriptor::Opaque {
   std::shared_ptr<device::nvidia::Handle::Internal> internal;
@@ -181,6 +181,9 @@ infiniStatus_t Descriptor::create(infiniopHandle_t handle_,
   auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
   auto dtype = input_desc->dtype();
 
+  printf("Creating MaxPool Descriptor with dtype: %s\n",
+         infiniDtypeToString(dtype).c_str());
+
   CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
 
   auto result = MaxPoolInfo::create(output_desc, input_desc, kernel_size,
@@ -208,6 +211,21 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #ifdef ENABLE_CUDNN_API
   const float alpha = 1.0f, beta = 0.0f;
 
+  //打印input展平后的前十个数据
+  // printf("MaxPool input (first 10 elements): ");
+  // const uint16_t *input_data = static_cast<const uint16_t *>(input);
+  // for (int i = 0; i < 10; ++i) {
+  //   // 将BF16转换为float显示
+  //   union {
+  //     uint32_t bits;
+  //     float value;
+  //   } converter;
+  //   uint16_t bf16_val = input_data[i];
+  //   converter.bits = static_cast<uint32_t>(bf16_val) << 16;
+  //   printf("%f ", converter.value);
+  // }
+  // printf("\n");
+
   CHECK_STATUS(_opaque->internal->useCudnn(
       (cudaStream_t)stream, [&](cudnnHandle_t handle) {
         CHECK_CUDNN(cudnnPoolingForward(handle, _opaque->pooling_desc, &alpha,
@@ -222,4 +240,4 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #endif
 }
 
-} // namespace op::max_pool::nvidia
+} // namespace op::maxpool::nvidia

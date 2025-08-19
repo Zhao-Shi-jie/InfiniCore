@@ -10,7 +10,7 @@
 #include "infiniop/ops/conv_backward.h"
 #include "infiniop/ops/gemm.h"
 #include "infiniop/ops/interpolate_nearest.h"
-#include "infiniop/ops/max_pool.h"
+#include "infiniop/ops/maxpool.h"
 #include "infiniop/ops/maxpool_backward.h"
 #include "infiniop/ops/mul.h"
 #include "infiniop/ops/random_sample.h"

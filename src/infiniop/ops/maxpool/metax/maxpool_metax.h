@@ -1,7 +1,7 @@
 #ifndef __MAX_POOL_METAX_H__
 #define __MAX_POOL_METAX_H__
 
-#include "../max_pool.h"
+#include "../maxpool.h"
 
 DESCRIPTOR(metax)
 
