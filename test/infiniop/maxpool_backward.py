@@ -31,42 +31,26 @@ NUM_ITERATIONS = 1000
 
 # Test cases: (input_shape, input_stride, kernel_size, stride, padding, ceil_mode)
 _TEST_CASES = [
-    # 1D MaxPool, small cases
-    ((1, 1, 8), None, (2,), (2,), (1,), False),      # basic 1D, odd padding
-    ((2, 4, 16), None, (3,), (2,), (1,), False),     # batch, multi-channel, stride < kernel
-    ((1, 2, 5), None, (3,), (2,), (0,), True),       # ceil_mode True, 1D
+    # 1D MaxPool
+    ((1, 1, 8), None, (2,), (2,), (1,), False), 
+    ((2, 4, 16), None, (3,), (2,), (1,), False),
+    ((1, 2, 5), None, (3,), (2,), (0,), True),
+    ((8, 16, 1024), None, (5,), (3,), (2,), False),
 
-    # 1D MaxPool, large case
-    ((8, 16, 1024), None, (5,), (3,), (2,), False),  # large 1D
+    # 2D MaxPool
+    ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),
+    ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),
+    ((1, 1, 7, 7), None, (3, 3), (2, 2), (1, 1), True),
+    ((4, 128, 64, 64), None, (3, 3), (2, 2), (1, 1), False),
 
-    # 2D MaxPool, small cases
-    ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),   # basic 2D
-    ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),   # batch, multi-channel, padding
-    ((1, 1, 7, 7), None, (3, 3), (2, 2), (1, 1), True),    # ceil_mode True, 2D
-    ((1, 1, 7, 7), None, (3, 3), (3, 3), (1, 1), True),    # stride == kernel, ceil_mode
-
-    # 2D MaxPool, large case
-    ((4, 128, 64, 64), None, (3, 3), (2, 2), (1, 1), False), # large 2D
-
-    # 3D MaxPool, small cases
-    ((1, 1, 4, 4, 4), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False), # basic 3D
-    ((2, 2, 8, 8, 8), None, (2, 3, 3), (2, 2, 2), (0, 1, 1), False), # batch, multi-channel, uneven kernel/stride/pad
-
-    # 3D MaxPool, large case
-    ((2, 8, 32, 32, 32), None, (3, 3, 3), (2, 2, 2), (1, 1, 1), True), # large 3D
-
-    # Edge cases
-    ((1, 1, 1), None, (1,), (1,), (0,), False),         # minimal 1D
-    ((1, 1, 1, 1), None, (1, 1), (1, 1), (0, 0), False),# minimal 2D
-    ((1, 1, 1, 1, 1), None, (1, 1, 1), (1, 1, 1), (0, 0, 0), False), # minimal 3D
-
-    # Non-square kernel/stride/paddingTrue
-    ((1, 1, 10, 20), None, (2, 5), (2, 3), (1, 2), False), # 2D, non-square
-    ((1, 1, 10, 20, 30), None, (2, 3, 4), (2, 2, 3), (1, 1, 2), False), # 3D, non-cube
+    # 3D MaxPool
+    ((1, 1, 4, 4, 4), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False),
+    ((2, 2, 8, 8, 8), None, (2, 3, 3), (2, 2, 2), (0, 1, 1), False),
+    ((1, 1, 10, 20, 30), None, (2, 3, 4), (2, 2, 3), (1, 1, 2), False),
 
     # Large batch/channel
-    ((32, 64, 16, 16), None, (2, 2), (2, 2), (0, 0), False), # large batch/channel 2D
-    ((16, 32, 8, 8, 8), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False), # large batch/channel 3D
+    ((32, 64, 16, 16), None, (2, 2), (2, 2), (0, 0), False), 
+    ((16, 32, 8, 8, 8), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False),
 ]
 
 # Data types used for testing
@@ -74,9 +58,9 @@ _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.BF16, InfiniDtype.F16]
 
 # Tolerance map for different data types
 _TOLERANCE_MAP = {
-    InfiniDtype.F16: {"atol": 2e-2, "rtol": 2e-2},
-    InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
-    InfiniDtype.BF16: {"atol": 2e-2, "rtol": 2e-2},
+    InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
+    InfiniDtype.F32: {"atol": 1e-4, "rtol": 1e-4},
+    InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 

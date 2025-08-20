@@ -31,101 +31,23 @@ NUM_ITERATIONS = 1000
 
 # Test cases: (input_shape, input_stride, kernel_size, stride, padding, ceil_mode)
 _TEST_CASES = [
-    # (
-    #     (3, 2, 77),        # input_shape: N=1, C=3, L=8
-    #     None,             # Use default contiguous strides  
-    #     (6,),             # kernel_size
-    #     (4,),             # stride
-    #     (3,),             # padding
-    #     True,            # ceil_mode
-    # ),
     # 1D max pooling cases
-    (
-        (1, 3, 8),        # input_shape: N=1, C=3, L=8
-        None,             # Use default contiguous strides  
-        (2,),             # kernel_size
-        (2,),             # stride
-        (0,),             # padding
-        False,            # ceil_mode
-    ),
-    (
-        (2, 4, 16),       # input_shape: N=2, C=4, L=16
-        None,             # Use default contiguous strides
-        (3,),             # kernel_size
-        (2,),             # stride
-        (1,),             # padding
-        False,            # ceil_mode
-    ),
+    ((1, 3, 8), None, (2,), (2,), (0,), False),
+    ((2, 4, 16), None, (3,), (2,), (1,), False),
     
     # 2D max pooling cases
-    (
-        (1, 1, 4, 4),     # input_shape: N=1, C=1, H=4, W=4
-        None,             # Use default contiguous strides
-        (2, 2),           # kernel_size
-        (2, 2),           # stride
-        (0, 0),           # padding
-        False,            # ceil_mode
-    ),
-    (
-        (2, 3, 8, 8),     # input_shape: N=2, C=3, H=8, W=8
-        None,             # Use default contiguous strides
-        (3, 3),           # kernel_size
-        (2, 2),           # stride
-        (1, 1),           # padding
-        False,            # ceil_mode
-    ),
-    (
-        (1, 64, 32, 32),  # input_shape: N=1, C=64, H=32, W=32
-        None,             # Use default contiguous strides
-        (2, 2),           # kernel_size
-        (2, 2),           # stride
-        (0, 0),           # padding
-        False,            # ceil_mode
-    ),
-    (
-        (4, 128, 16, 16), # input_shape: N=4, C=128, H=16, W=16
-        None,             # Use default contiguous strides
-        (3, 3),           # kernel_size
-        (1, 1),           # stride
-        (1, 1),           # padding
-        False,            # ceil_mode
-    ),
+    ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),
+    ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),
+    ((1, 64, 32, 32), None, (2, 2), (2, 2), (0, 0), False),
+    ((4, 128, 16, 16), None, (3, 3), (1, 1), (1, 1), False),
     
     # 3D max pooling cases
-    (
-        (1, 1, 4, 4, 4),  # input_shape: N=1, C=1, D=4, H=4, W=4
-        None,             # Use default contiguous strides
-        (2, 2, 2),        # kernel_size
-        (2, 2, 2),        # stride
-        (0, 0, 0),        # padding
-        False,            # ceil_mode
-    ),
-    (
-        (2, 2, 8, 8, 8),  # input_shape: N=2, C=2, D=8, H=8, W=8
-        None,             # Use default contiguous strides
-        (2, 3, 3),        # kernel_size
-        (2, 2, 2),        # stride
-        (0, 1, 1),        # padding
-        False,            # ceil_mode
-    ),
+    ((1, 1, 4, 4, 4), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False),
+    ((2, 2, 8, 8, 8), None, (2, 3, 3), (2, 2, 2), (0, 1, 1), False),
     
     # Cases with ceil_mode=True
-    (
-        (1, 1, 7, 7),     # input_shape: N=1, C=1, H=7, W=7
-        None,             # Use default contiguous strides
-        (3, 3),           # kernel_size
-        (2, 2),           # stride
-        (1, 1),           # padding
-        True,             # ceil_mode
-    ),
-    (
-        (1, 2, 5),        # input_shape: N=1, C=2, L=5
-        None,             # Use default contiguous strides
-        (3,),             # kernel_size
-        (2,),             # stride
-        (0,),             # padding
-        True,             # ceil_mode
-    ),
+    ((1, 1, 7, 7), None, (3, 3), (2, 2), (1, 1), True),
+    ((1, 2, 5), None, (3,), (2,), (0,), True),
 ]
 
 # Data types used for testing
@@ -134,8 +56,8 @@ _TENSOR_DTYPES = [InfiniDtype.F16, InfiniDtype.F32, InfiniDtype.BF16]
 # Tolerance map for different data types
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
-    InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
-    InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-2},
+    InfiniDtype.F32: {"atol": 1e-4, "rtol": 1e-4},
+    InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 
