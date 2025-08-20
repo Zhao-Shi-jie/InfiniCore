@@ -4,46 +4,33 @@
 #include "../info.h"
 #include "conv_backward_nvidia.cuh"
 
-// 启动 kernel 的辅助函数
 infiniStatus_t launch_bias_grad_kernel(const void *grad_output, void *grad_bias,
                                        const int *grad_output_dims,
                                        size_t conv_ndim,
                                        cudnnDataType_t data_type,
                                        cudaStream_t stream) {
+  // 只处理 bf16 类型
+  if (data_type != CUDNN_DATA_BFLOAT16) {
+    return INFINI_STATUS_BAD_TENSOR_DTYPE;
+  }
 
   int batch_size = grad_output_dims[0];
   int channels = grad_output_dims[1];
   int spatial_size = 1;
 
-  switch (conv_ndim) {
-  case 1:
-    spatial_size = grad_output_dims[2];
-    break;
-  case 2:
-    spatial_size = grad_output_dims[2] * grad_output_dims[3];
-    break;
-  case 3:
-    spatial_size =
-        grad_output_dims[2] * grad_output_dims[3] * grad_output_dims[4];
-    break;
-  default:
-    printf("ERROR: Unsupported convolution dimension: %zu\n", conv_ndim);
-    return INFINI_STATUS_BAD_PARAM;
+  // 计算空间维度大小
+  for (size_t i = 2; i < conv_ndim + 2; ++i) {
+    spatial_size *= grad_output_dims[i];
   }
 
   dim3 block(256);
   dim3 grid((channels + block.x - 1) / block.x);
 
-  compute_bias_grad_kernel<<<grid, block, 0, stream>>>(
-      grad_output, grad_bias, batch_size, channels, spatial_size, data_type);
-
-  // 检查 kernel 启动错误
-  cudaError_t launch_error = cudaGetLastError();
-  if (launch_error != cudaSuccess) {
-    printf("ERROR: Kernel launch failed: %s\n",
-           cudaGetErrorString(launch_error));
-    return INFINI_STATUS_INTERNAL_ERROR;
-  }
+  // 直接调用 bf16 kernel
+  compute_bias_grad_kernel<__nv_bfloat16><<<grid, block, 0, stream>>>(
+      reinterpret_cast<const __nv_bfloat16 *>(grad_output),
+      reinterpret_cast<__nv_bfloat16 *>(grad_bias), batch_size, channels,
+      spatial_size);
 
   return INFINI_STATUS_SUCCESS;
 }
