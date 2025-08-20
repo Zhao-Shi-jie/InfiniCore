@@ -16,6 +16,9 @@ DECLARE_INFINIOP_TEST(add)
 DECLARE_INFINIOP_TEST(causal_softmax)
 DECLARE_INFINIOP_TEST(rearrange)
 DECLARE_INFINIOP_TEST(sub)
+DECLARE_INFINIOP_TEST(cross_entropy_loss)
+DECLARE_INFINIOP_TEST(averagepool)
+DECLARE_INFINIOP_TEST(averagepool_backward)
 
 #define REGISTER_INFINIOP_TEST(name)                      \
     {                                                     \
@@ -43,6 +46,9 @@ DECLARE_INFINIOP_TEST(sub)
         REGISTER_INFINIOP_TEST(causal_softmax) \
         REGISTER_INFINIOP_TEST(rearrange)      \
         REGISTER_INFINIOP_TEST(sub)            \
+        REGISTER_INFINIOP_TEST(cross_entropy_loss)    \
+        REGISTER_INFINIOP_TEST(averagepool)            \
+        REGISTER_INFINIOP_TEST(averagepool_backward)   \
     }
 
 namespace infiniop_test {

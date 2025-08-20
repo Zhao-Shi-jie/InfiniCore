@@ -1,6 +1,6 @@
 #include "../../../devices/nvidia/nvidia_common.cuh"
 #include "../../../devices/nvidia/nvidia_handle.cuh"
-#include "avg_pool_nvidia.cuh"
+#include "averagepool_nvidia.cuh"
 
 #define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func) \
   do {                                                   \
@@ -17,7 +17,7 @@
     DESTROY_CUDNN_DESCRIPTOR(pooling_desc, cudnnDestroyPoolingDescriptor); \
   } while (0)
 
-namespace op::avg_pool::nvidia {
+namespace op::averagepool::nvidia {
 
 struct Descriptor::Opaque {
     std::shared_ptr<device::nvidia::Handle::Internal> internal;
@@ -223,4 +223,4 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #endif
 }
 
-} // namespace op::avg_pool::nvidia
+} // namespace op::averagepool::nvidia

@@ -1,12 +1,12 @@
-#ifndef __AVG_POOL_INFO_H__
-#define __AVG_POOL_INFO_H__
+#ifndef __AVERAGEPOOL_INFO_H__
+#define __AVERAGEPOOL_INFO_H__
 
 #include "../../../utils.h"
 #include "../../operator.h"
 #include "../../tensor.h"
 #include <vector>
 
-namespace op::avg_pool {
+namespace op::averagepool {
 
 inline utils::Result<size_t> calculatePoolOutputSize(
     size_t input_size,
@@ -106,6 +106,6 @@ public:
         return utils::Result<AvgPoolInfo>(std::move(info));
     }
 };
-} // namespace op::avg_pool
+} // namespace op::averagepool
 
-#endif // __AVG_POOL_INFO_H__
+#endif // __AVERAGEPOOL_INFO_H__

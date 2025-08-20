@@ -28,16 +28,40 @@ NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
 _TEST_CASES = [
-    ((1, 3, 8), None, (2,), (2,), (0,), False),
-    ((2, 4, 16), None, (3,), (2,), (1,), False),
-    ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),
-    ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),
-    ((1, 64, 32, 32), None, (2, 2), (2, 2), (0, 0), False),
-    ((4, 128, 16, 16), None, (3, 3), (1, 1), (1, 1), False),
-    ((1, 1, 4, 4, 4), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False),
-    ((2, 2, 8, 8, 8), None, (2, 3, 3), (2, 2, 2), (0, 1, 1), False),
-    ((1, 1, 7, 7), None, (3, 3), (2, 2), (1, 1), True),
-    ((1, 2, 5), None, (3,), (2,), (0,), True),
+    # ============ 1D Average Pooling Tests (converted to MaxPool format) ============
+    # Basic cases
+    ((4, 8, 128), None, (3,), (1,), (0,), False),      # kernel=3, stride=1, pad=0
+    ((2, 16, 256), None, (5,), (2,), (2,), False),     # kernel=5, stride=2, pad=2
+    ((8, 4, 64), None, (7,), (3,), (1,), False),       # kernel=7, stride=3, pad=1
+    # ceil_mode variations
+    ((1, 3, 99), None, (4,), (3,), (1,), True),        # kernel=4, stride=3, pad=1
+    ((3, 2, 77), None, (6,), (4,), (0,), True),        # kernel=6, stride=4, pad=0
+
+    # ============ 2D Average Pooling Tests ============
+    # Basic cases with square kernels
+    ((2, 3, 64, 64), None, (3, 3), (1, 1), (1, 1), False),
+    ((4, 16, 128, 128), None, (5, 5), (2, 2), (2, 2), False),
+    ((1, 8, 96, 96), None, (7, 7), (3, 3), (0, 0), False),
+    # Rectangular kernels
+    ((2, 4, 80, 120), None, (3, 5), (1, 2), (1, 2), False),
+    ((1, 6, 72, 48), None, (7, 3), (2, 1), (3, 1), False),
+    ((3, 2, 56, 84), None, (2, 4), (2, 3), (0, 2), False),
+    # ceil_mode variations
+    ((1, 1, 33, 33), None, (4, 4), (3, 3), (1, 1), True),
+    ((2, 5, 77, 89), None, (5, 3), (4, 2), (2, 1), True),
+
+    # ============ 3D Average Pooling Tests ============
+    # Basic cubic kernels
+    ((1, 2, 32, 32, 32), None, (3, 3, 3), (1, 1, 1), (1, 1, 1), False),
+    ((2, 4, 48, 48, 48), None, (5, 5, 5), (2, 2, 2), (2, 2, 2), False),
+    ((1, 1, 64, 64, 64), None, (7, 7, 7), (3, 3, 3), (0, 0, 0), False),
+    # Non-cubic kernels
+    ((1, 3, 24, 36, 48), None, (2, 3, 4), (1, 2, 2), (0, 1, 2), False),
+    ((2, 2, 40, 32, 56), None, (5, 3, 7), (2, 1, 3), (2, 1, 3), False),
+    ((1, 1, 28, 44, 36), None, (3, 5, 2), (2, 3, 1), (1, 2, 1), False),
+    # ceil_mode variations
+    ((1, 1, 27, 27, 27), None, (4, 4, 4), (3, 3, 3), (1, 1, 1), True),
+    ((2, 2, 33, 45, 39), None, (5, 3, 4), (3, 2, 3), (2, 1, 1), True),
 ]
 
 _TENSOR_DTYPES = [InfiniDtype.F16, InfiniDtype.F32, InfiniDtype.BF16]
@@ -47,7 +71,7 @@ _TOLERANCE_MAP = {
     InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-2},
 }
 
-def avg_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tensor):
+def averagepool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tensor):
     ndim = len(input_tensor.shape) - 2
     if ndim == 1:
         result = F.avg_pool1d(input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode)
@@ -77,7 +101,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
 
     print(f"Testing AvgPool on {InfiniDeviceNames[device]} with input_shape: {input_shape}, kernel_size: {kernel_size}, stride: {stride}, padding: {padding}, ceil_mode: {ceil_mode}, dtype: {InfiniDtypeNames[tensor_dtype]}")
 
-    avg_pool(input_tensor.torch_tensor(), kernel_size, stride, padding, ceil_mode, output_tensor.torch_tensor())
+    averagepool(input_tensor.torch_tensor(), kernel_size, stride, padding, ceil_mode, output_tensor.torch_tensor())
 
     if sync: sync()
 
@@ -100,7 +124,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
     check_error(LIBINFINIOP.infiniopGetAvgPoolWorkspaceSize(descriptor, ctypes.byref(workspace_size)))
     workspace = TestWorkspace(workspace_size.value, output_tensor.device)
 
-    def lib_avg_pool():
+    def lib_averagepool():
         check_error(LIBINFINIOP.infiniopAvgPool(
             descriptor,
             workspace.data(),
@@ -110,7 +134,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
             None,
         ))
 
-    lib_avg_pool()
+    lib_averagepool()
 
     atol, rtol = get_tolerance(_TOLERANCE_MAP, tensor_dtype)
     if DEBUG:
@@ -119,8 +143,8 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
     assert torch.allclose(output_tensor.actual_tensor(), output_tensor.torch_tensor(), atol=atol, rtol=rtol), f"Mismatch for shape {input_shape}, kernel {kernel_size}"
 
     if PROFILE:
-        profile_operation("PyTorch", lambda: avg_pool(input_tensor.torch_tensor(), kernel_size, stride, padding, ceil_mode, output_tensor.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
-        profile_operation("    lib", lib_avg_pool, device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("PyTorch", lambda: averagepool(input_tensor.torch_tensor(), kernel_size, stride, padding, ceil_mode, output_tensor.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("    lib", lib_averagepool, device, NUM_PRERUN, NUM_ITERATIONS)
 
     check_error(LIBINFINIOP.infiniopDestroyAvgPoolDescriptor(descriptor))
 

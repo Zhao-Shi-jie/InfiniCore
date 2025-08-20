@@ -1,12 +1,12 @@
-#ifndef __AVGPOOL_BACKWARD_H__
-#define __AVGPOOL_BACKWARD_H__
+#ifndef __AVERAGEPOOL_BACKWARD_H__
+#define __AVERAGEPOOL_BACKWARD_H__
 
 #include "../../operator.h"
 #include "info.h"
 
 #define DESCRIPTOR(NAMESPACE)                                    \
                                                                  \
-    namespace op::avgpool_backward::NAMESPACE {                  \
+    namespace op::averagepool_backward::NAMESPACE {              \
     class Descriptor final : public InfiniopDescriptor {         \
         struct Opaque;                                           \
         Opaque *_opaque;                                         \
@@ -52,4 +52,4 @@
     };                                                           \
     }
 
-#endif // __AVGPOOL_BACKWARD_H__
+#endif // __AVERAGEPOOL_BACKWARD_H__

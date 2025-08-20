@@ -1,6 +1,6 @@
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
-#include "avg_pool_metax.h"
+#include "averagepool_metax.h"
 
 #define DESTROY_hcdnn_DESCRIPTOR(desc_ptr, destroy_func)                       \
   do {                                                                         \
@@ -17,7 +17,7 @@
     DESTROY_hcdnn_DESCRIPTOR(pooling_desc, hcdnnDestroyPoolingDescriptor);     \
   } while (0)
 
-namespace op::avg_pool::metax {
+namespace op::averagepool::metax {
 
 struct Descriptor::Opaque {
   std::shared_ptr<device::metax::Handle::Internal> internal;
@@ -179,4 +179,4 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #endif
 }
 
-} // namespace op::avg_pool::metax
+} // namespace op::averagepool::metax

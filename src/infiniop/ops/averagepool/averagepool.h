@@ -1,11 +1,11 @@
-#ifndef __AVG_POOL_H__
-#define __AVG_POOL_H__
+#ifndef __AVERAGEPOOL_H__
+#define __AVERAGEPOOL_H__
 
 #include "../../operator.h"
 #include "info.h"
 
 #define DESCRIPTOR(NAMESPACE)                                            \
-    namespace op::avg_pool::NAMESPACE {                                  \
+    namespace op::averagepool::NAMESPACE {                                  \
     class Descriptor final : public InfiniopDescriptor {                 \
         struct Opaque;                                                   \
         Opaque *_opaque;                                                 \
@@ -49,4 +49,4 @@
     };                                                                   \
     }
 
-#endif // __AVG_POOL_H__
+#endif // __AVERAGEPOOL_H__

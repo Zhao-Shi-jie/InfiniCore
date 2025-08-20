@@ -1,5 +1,5 @@
-#ifndef __INFINIOP_AVG_POOL_H__
-#define __INFINIOP_AVG_POOL_H__
+#ifndef __INFINIOP_AVERAGEPOOL_H__
+#define __INFINIOP_AVERAGEPOOL_H__
 
 #include "../operator_descriptor.h"
 
@@ -30,4 +30,4 @@ __C infiniStatus_t infiniopAvgPool(
 __C infiniStatus_t infiniopDestroyAvgPoolDescriptor(
     infiniopAvgPoolDescriptor_t desc);
 
-#endif // __INFINIOP_AVG_POOL_H__
+#endif // __INFINIOP_AVERAGEPOOL_H__

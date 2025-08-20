@@ -1,5 +1,5 @@
-#ifndef __INFINIOP_AVGPOOL_BACKWARD_H__
-#define __INFINIOP_AVGPOOL_BACKWARD_H__
+#ifndef __INFINIOP_AVERAGEPOOL_BACKWARD_H__
+#define __INFINIOP_AVERAGEPOOL_BACKWARD_H__
 
 #include "../operator_descriptor.h"
 
@@ -32,4 +32,4 @@ __C infiniStatus_t infiniopAvgPoolBackward(
 __C infiniStatus_t infiniopDestroyAvgPoolBackwardDescriptor(
     infiniopAvgPoolBackwardDescriptor_t desc);
 
-#endif // __INFINIOP_AVGPOOL_BACKWARD_H__
+#endif // __INFINIOP_AVERAGEPOOL_BACKWARD_H__

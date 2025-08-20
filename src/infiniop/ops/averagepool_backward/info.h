@@ -1,12 +1,12 @@
-#ifndef __AVGPOOL_BACKWARD_INFO_H__
-#define __AVGPOOL_BACKWARD_INFO_H__
+#ifndef __AVERAGEPOOL_BACKWARD_INFO_H__
+#define __AVERAGEPOOL_BACKWARD_INFO_H__
 
 #include "../../../utils.h"
 #include "../../operator.h"
 #include "../../tensor.h"
 #include <vector>
 
-namespace op::avgpool_backward {
+namespace op::averagepool_backward {
 
 class AvgPoolBackwardInfo {
     AvgPoolBackwardInfo() = default;
@@ -76,6 +76,6 @@ public:
     }
 };
 
-} // namespace op::avgpool_backward
+} // namespace op::averagepool_backward
 
-#endif // __AVGPOOL_BACKWARD_INFO_H__
+#endif // __AVERAGEPOOL_BACKWARD_INFO_H__

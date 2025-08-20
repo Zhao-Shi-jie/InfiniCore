@@ -1,12 +1,12 @@
 #include "../../operator.h"
 #include "../../handle.h"
-#include "infiniop/ops/avgpool_backward.h"
+#include "infiniop/ops/averagepool_backward.h"
 
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
-#include "nvidia/avgpool_backward_nvidia.cuh"
+#include "nvidia/averagepool_backward_nvidia.cuh"
 #endif
 #ifdef ENABLE_METAX_API
-#include "metax/avgpool_backward_metax.h"
+#include "metax/averagepool_backward_metax.h"
 #endif
 
 __C infiniStatus_t infiniopCreateAvgPoolBackwardDescriptor(
@@ -22,9 +22,9 @@ __C infiniStatus_t infiniopCreateAvgPoolBackwardDescriptor(
 
 #define CREATE(CASE, NAMESPACE)                                                         \
     case CASE:                                                                          \
-        return op::avgpool_backward::NAMESPACE::Descriptor::create(                     \
+        return op::averagepool_backward::NAMESPACE::Descriptor::create(                     \
             handle,                                                                     \
-            reinterpret_cast<op::avgpool_backward::NAMESPACE::Descriptor **>(desc_ptr), \
+            reinterpret_cast<op::averagepool_backward::NAMESPACE::Descriptor **>(desc_ptr), \
             grad_input_desc,                                                            \
             grad_output_desc,                                                           \
             input_desc,                                                                 \
@@ -58,7 +58,7 @@ __C infiniStatus_t infiniopGetAvgPoolBackwardWorkspaceSize(
 
 #define GET(CASE, NAMESPACE)                                                                                  \
     case CASE:                                                                                                \
-        *size = reinterpret_cast<const op::avgpool_backward::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
+        *size = reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
@@ -91,7 +91,7 @@ __C infiniStatus_t infiniopAvgPoolBackward(
 
 #define CALCULATE(CASE, NAMESPACE)                                                         \
     case CASE:                                                                             \
-        return reinterpret_cast<const op::avgpool_backward::NAMESPACE::Descriptor *>(desc) \
+        return reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc) \
             ->calculate(workspace, workspace_size,                                         \
                         grad_input,                                                        \
                         grad_output,                                                       \
@@ -121,7 +121,7 @@ __C infiniStatus_t infiniopDestroyAvgPoolBackwardDescriptor(infiniopAvgPoolBackw
 
 #define DELETE(CASE, NAMESPACE)                                                             \
     case CASE:                                                                              \
-        delete reinterpret_cast<const op::avgpool_backward::NAMESPACE::Descriptor *>(desc); \
+        delete reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS;
 
     switch (desc->device_type) {

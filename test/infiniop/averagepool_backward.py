@@ -72,7 +72,7 @@ _TOLERANCE_MAP = {
 }
 
 
-def avg_pool_backward(input_tensor, grad_output_tensor, kernel_size, stride, padding, ceil_mode, grad_input_tensor):
+def averagepool_backward(input_tensor, grad_output_tensor, kernel_size, stride, padding, ceil_mode, grad_input_tensor):
     input_tensor = input_tensor.detach().clone().requires_grad_(True)
     ndim = len(input_tensor.shape) - 2
     if ndim == 1:
@@ -114,7 +114,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
     print(f"Testing AvgPoolBackward on {InfiniDeviceNames[device]} with input: {input_shape}, kernel: {kernel_size}, stride: {stride}, pad: {padding}, ceil_mode: {ceil_mode}")
     print(f"Input Tensor: {input_tensor.shape}, Grad Output Tensor: {grad_output_tensor.shape}, Grad Input Tensor: {grad_input_tensor.shape}")
 
-    avg_pool_backward(input_tensor.torch_tensor(), grad_output_tensor.torch_tensor(),
+    averagepool_backward(input_tensor.torch_tensor(), grad_output_tensor.torch_tensor(),
                       kernel_size, stride, padding, ceil_mode, grad_input_tensor.torch_tensor())
 
     if sync:
@@ -141,7 +141,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
         descriptor, ctypes.byref(workspace_size)))
     workspace = TestWorkspace(workspace_size.value, device)
 
-    def lib_avg_pool_backward():
+    def lib_averagepool_backward():
         check_error(LIBINFINIOP.infiniopAvgPoolBackward(
             descriptor,
             workspace.data(),
@@ -152,7 +152,7 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
             None
         ))
 
-    lib_avg_pool_backward()
+    lib_averagepool_backward()
 
     atol, rtol = get_tolerance(_TOLERANCE_MAP, tensor_dtype)
     if DEBUG:
@@ -160,10 +160,10 @@ def test(handle, device, input_shape, input_stride, kernel_size, stride, padding
     assert torch.allclose(grad_input_tensor.actual_tensor(), grad_input_tensor.torch_tensor(), atol=atol, rtol=rtol)
 
     if PROFILE:
-        profile_operation("PyTorch", lambda: avg_pool_backward(
+        profile_operation("PyTorch", lambda: averagepool_backward(
             input_tensor.torch_tensor(), grad_output_tensor.torch_tensor(),
             kernel_size, stride, padding, ceil_mode, grad_input_tensor.torch_tensor()), device, NUM_PRERUN, NUM_ITERATIONS)
-        profile_operation("lib", lib_avg_pool_backward, device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("lib", lib_averagepool_backward, device, NUM_PRERUN, NUM_ITERATIONS)
 
     check_error(LIBINFINIOP.infiniopDestroyAvgPoolBackwardDescriptor(descriptor))
 
