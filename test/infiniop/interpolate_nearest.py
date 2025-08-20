@@ -23,79 +23,32 @@ from typing import List, Tuple
 import math
 from torch.nn import functional as F
 
-# constant for control whether profile the pytorch and lib functions
-# NOTE: need to manually add synchronization function to the lib function,
-#       e.g., cudaDeviceSynchronize() for CUDA
 PROFILE = False
 NUM_PRERUN = 10
 NUM_ITERATIONS = 1000
 
 # Test cases: (input_shape, input_stride, output_shape, output_stride)
 _TEST_CASES = [
-    # Simple test case with contiguous strides first
-    (
-        (1, 1, 2, 2),
-        None,  # Use default contiguous strides
-        (1, 1, 4, 4),
-        None,  # Use default contiguous strides
-    ),
-    # Simple upscaling 2x
-    (
-        (1, 3, 4, 4),
-        (48, 16, 4, 1),
-        (1, 3, 8, 8),
-        (192, 64, 8, 1),
-    ),
-    # Simple downscaling 2x
-    (
-        (1, 3, 8, 8),
-        (192, 64, 8, 1),
-        (1, 3, 4, 4),
-        (48, 16, 4, 1),
-    ),
-    # Batch upscaling
-    (
-        (2, 4, 2, 2),
-        (16, 4, 2, 1),
-        (2, 4, 6, 6),
-        (144, 36, 6, 1),
-    ),
-    # Different aspect ratio scaling
-    (
-        (1, 1, 3, 5),
-        (15, 15, 5, 1),
-        (1, 1, 9, 10),
-        (90, 90, 10, 1),
-    ),
-    # Large batch, more channels
-    (
-        (4, 64, 16, 16),
-        (16384, 256, 16, 1),
-        (4, 64, 32, 32),
-        (65536, 1024, 32, 1),
-    ),
-    # Small to large upscaling
-    (
-        (1, 1, 1, 1),
-        (1, 1, 1, 1),
-        (1, 1, 7, 7),
-        (49, 49, 7, 1),
-    ),
-    # 测例1: 非连续内存布局 - Channel-first 转置
-    (
-        (1, 2, 3, 4),    # input_shape: N=1, C=2, H=3, W=4
-        (24, 1, 8, 2),   # input_stride: 特殊stride，C维stride=1（最小），类似转置
-        (1, 2, 6, 8),    # output_shape
-        (96, 1, 16, 2),  # output_stride: 保持相同的stride模式
-    ),
-
-    # 测例2: 带有内存间隙的布局 - Padded strides
-    (
-        (2, 3, 2, 2),    # input_shape: N=2, C=3, H=2, W=2  
-        (32, 8, 4, 1),   # input_stride: 每个维度都有额外的padding间隙
-        (2, 3, 4, 4),    # output_shape
-        (128, 32, 8, 1), # output_stride: 保持padding比例
-    ),
+    # 2D test cases - simplified to one line each
+    ((1, 1, 2, 2), None, (1, 1, 4, 4), None),  # Simple contiguous case
+    ((1, 3, 4, 4), (48, 16, 4, 1), (1, 3, 8, 8), (192, 64, 8, 1)),  # 2D upscaling 2x
+    ((1, 3, 8, 8), (192, 64, 8, 1), (1, 3, 4, 4), (48, 16, 4, 1)),  # 2D downscaling 2x
+    ((2, 4, 2, 2), (16, 4, 2, 1), (2, 4, 6, 6), (144, 36, 6, 1)),  # Batch upscaling
+    ((1, 1, 3, 5), (15, 15, 5, 1), (1, 1, 9, 10), (90, 90, 10, 1)),  # Different aspect ratio
+    ((4, 64, 16, 16), (16384, 256, 16, 1), (4, 64, 32, 32), (65536, 1024, 32, 1)),  # Large batch
+    ((1, 1, 1, 1), (1, 1, 1, 1), (1, 1, 7, 7), (49, 49, 7, 1)),  # Small to large
+    ((1, 2, 3, 4), (24, 1, 8, 2), (1, 2, 6, 8), (96, 1, 16, 2)),  # Non-contiguous layout
+    ((2, 3, 2, 2), (32, 8, 4, 1), (2, 3, 4, 4), (128, 32, 8, 1)),  # Padded strides
+    
+    # 1D test cases
+    ((1, 3, 8), (24, 8, 1), (1, 3, 16), (48, 16, 1)),  # 1D upscaling 2x
+    ((2, 5, 10), (50, 10, 1), (2, 5, 5), (25, 5, 1)),  # 1D downscaling 2x
+    ((4, 2, 32), (64, 32, 1), (4, 2, 64), (128, 64, 1)),  # 1D larger upscaling
+    
+    # 3D test cases
+    ((1, 2, 2, 2, 2), (16, 8, 4, 2, 1), (1, 2, 4, 4, 4), (128, 64, 16, 4, 1)),  # 3D upscaling 2x
+    ((1, 1, 2, 3, 4), (24, 24, 12, 4, 1), (1, 1, 4, 6, 8), (192, 192, 48, 8, 1)),  # 3D uniform upscaling
+    ((3, 2, 5, 5, 5), (250, 125, 25, 5, 1), (3, 2, 3, 3, 3), (54, 27, 9, 3, 1)),  # 3D non-uniform scaling
 ]
 
 # Data types used for testing
