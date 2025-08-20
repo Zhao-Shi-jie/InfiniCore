@@ -16,8 +16,6 @@ std::shared_ptr<Test> Test::build(
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors,
     double rtol, double atol) {
 
-    std::cout << "DEBUG: interpolate_nearest::Test::build called" << std::endl;
-
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
 
@@ -25,12 +23,6 @@ std::shared_ptr<Test> Test::build(
         std::cout << "DEBUG: Name check failed" << std::endl;
         throw std::runtime_error("Invalid Test");
     }
-
-    std::cout << "DEBUG: Available tensors: ";
-    for (const auto &pair : tensors) {
-        std::cout << pair.first << " ";
-    }
-    std::cout << std::endl;
 
     test->_attributes->input = tensors["input"];            // F32 输入数据
     test->_attributes->expected_output = tensors["output"]; // F64 期望结果

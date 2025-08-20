@@ -1,5 +1,6 @@
 #include "ops.hpp"
 #include "utils.hpp"
+#include <cstdio>
 #include <infinirt.h>
 #include <iomanip>
 #include <iostream>
@@ -7,18 +8,15 @@
 namespace infiniop_test::conv_backward {
 
 struct Test::Attributes {
-    // 输入张量
     std::shared_ptr<Tensor> grad_output;
     std::shared_ptr<Tensor> input;
     std::shared_ptr<Tensor> weight;
     std::shared_ptr<Tensor> bias;
 
-    // 期望输出张量（F64 精度）
     std::shared_ptr<Tensor> expected_grad_input;
     std::shared_ptr<Tensor> expected_grad_weight;
     std::shared_ptr<Tensor> expected_grad_bias;
 
-    // 卷积参数
     std::vector<int> stride;
     std::vector<int> padding;
     std::vector<int> dilation;
@@ -46,7 +44,6 @@ std::shared_ptr<Test> Test::build(
         test->_attributes->bias = bias_it->second;
     }
 
-    // 加载期望输出张量
     test->_attributes->expected_grad_input = tensors["grad_input"];
     test->_attributes->expected_grad_weight = tensors["grad_weight"];
 
@@ -55,36 +52,56 @@ std::shared_ptr<Test> Test::build(
         test->_attributes->expected_grad_bias = grad_bias_it->second;
     }
 
+    size_t pool_ndim = test->_attributes->input->shape().size() - 2;
+    if (pool_ndim == 0) {
+        throw std::runtime_error("Input tensor must have at least 3 dimensions (N, C, ...)");
+    }
+
     auto stride_data = attributes["stride"];
     auto padding_data = attributes["padding"];
     auto dilation_data = attributes["dilation"];
-
-    // 验证数据大小
-    if (stride_data.size() % sizeof(int) != 0 || padding_data.size() % sizeof(int) != 0 || dilation_data.size() % sizeof(int) != 0) {
-        throw std::runtime_error("Invalid parameter data size");
-    }
 
     size_t stride_count = stride_data.size() / sizeof(int);
     size_t padding_count = padding_data.size() / sizeof(int);
     size_t dilation_count = dilation_data.size() / sizeof(int);
 
-    // 确保维度一致
-    if (stride_count != padding_count || stride_count != dilation_count) {
-        throw std::runtime_error("Parameter dimension mismatch");
+    if (stride_data.size() % sizeof(int) != 0) {
+        throw std::runtime_error("Invalid stride data size");
+    }
+    const int *stride_ptr = reinterpret_cast<const int *>(stride_data.data());
+    if (stride_count == pool_ndim) {
+        test->_attributes->stride.clear();
+        for (size_t i = 0; i < stride_count; i++) {
+            test->_attributes->stride.push_back(static_cast<size_t>(stride_ptr[i]));
+        }
+    } else {
+        test->_attributes->stride.assign(pool_ndim, static_cast<size_t>(stride_ptr[0]));
     }
 
-    test->_attributes->stride.resize(stride_count);
-    test->_attributes->padding.resize(padding_count);
-    test->_attributes->dilation.resize(dilation_count);
-
-    const int *stride_ptr = reinterpret_cast<const int *>(stride_data.data());
+    if (padding_data.size() % sizeof(int) != 0) {
+        throw std::runtime_error("Invalid padding data size");
+    }
     const int *padding_ptr = reinterpret_cast<const int *>(padding_data.data());
-    const int *dilation_ptr = reinterpret_cast<const int *>(dilation_data.data());
+    if (padding_count == pool_ndim) {
+        test->_attributes->padding.clear();
+        for (size_t i = 0; i < padding_count; i++) {
+            test->_attributes->padding.push_back(static_cast<size_t>(padding_ptr[i]));
+        }
+    } else {
+        test->_attributes->padding.assign(pool_ndim, static_cast<size_t>(padding_ptr[0]));
+    }
 
-    for (size_t i = 0; i < stride_count; i++) {
-        test->_attributes->stride[i] = stride_ptr[i];
-        test->_attributes->padding[i] = padding_ptr[i];
-        test->_attributes->dilation[i] = dilation_ptr[i];
+    if (dilation_data.size() % sizeof(int) != 0) {
+        throw std::runtime_error("Invalid dilation data size");
+    }
+    const int *dilation_ptr = reinterpret_cast<const int *>(dilation_data.data());
+    if (dilation_count == pool_ndim) {
+        test->_attributes->dilation.clear();
+        for (size_t i = 0; i < dilation_count; i++) {
+            test->_attributes->dilation.push_back(static_cast<size_t>(dilation_ptr[i]));
+        }
+    } else {
+        test->_attributes->dilation.assign(pool_ndim, static_cast<size_t>(dilation_ptr[0]));
     }
 
     test->_attributes->groups = *reinterpret_cast<int *>(attributes["groups"].data());
@@ -97,31 +114,18 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     size_t warm_ups, size_t iterations) {
     infiniopConvBackwardDescriptor_t op_desc;
 
-    // 将输入张量移动到指定设备
     auto grad_output = _attributes->grad_output->to(device, device_id);
     auto input = _attributes->input->to(device, device_id);
     auto weight = _attributes->weight->to(device, device_id);
     auto bias = _attributes->bias ? _attributes->bias->to(device, device_id) : nullptr;
 
-    // 期望输出张量
     auto expected_grad_input = _attributes->expected_grad_input;
     auto expected_grad_weight = _attributes->expected_grad_weight;
     auto expected_grad_bias = _attributes->expected_grad_bias;
 
-    // 获取输入数据类型
     auto input_dtype = input->ggml_type();
 
-    // 手动创建 grad_input 张量（使用期望结果的形状，但使用输入的数据类型）
     auto grad_input_shape = expected_grad_input->shape();
-    std::cout << "DEBUG: grad_input shape: [";
-    for (size_t i = 0; i < grad_input_shape.size(); i++) {
-        if (i > 0) {
-            std::cout << ", ";
-        }
-        std::cout << grad_input_shape[i];
-    }
-    std::cout << "]" << std::endl;
-
     size_t grad_input_size = 1;
     for (auto dim : grad_input_shape) {
         grad_input_size *= dim;
@@ -137,19 +141,10 @@ std::shared_ptr<infiniop_test::Result> Test::run(
             grad_input_strides[i] = grad_input_strides[i + 1] * grad_input_shape[i + 1];
         }
     }
-    std::cout << "DEBUG: grad_input strides: [";
-    for (size_t i = 0; i < grad_input_strides.size(); i++) {
-        if (i > 0) {
-            std::cout << ", ";
-        }
-        std::cout << grad_input_strides[i];
-    }
-    std::cout << "]" << std::endl;
 
     auto actual_grad_input = std::make_shared<Tensor>(
         grad_input_memory, 0, grad_input_shape, grad_input_strides, input_dtype);
 
-    // 手动创建 grad_weight 张量
     auto grad_weight_shape = expected_grad_weight->shape();
     size_t grad_weight_size = 1;
     for (auto dim : grad_weight_shape) {
@@ -170,7 +165,6 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     auto actual_grad_weight = std::make_shared<Tensor>(
         grad_weight_memory, 0, grad_weight_shape, grad_weight_strides, input_dtype);
 
-    // 手动创建 grad_bias 张量
     std::shared_ptr<Tensor> actual_grad_bias = nullptr;
     if (bias && expected_grad_bias) {
         auto grad_bias_shape = expected_grad_bias->shape();
