@@ -7,42 +7,32 @@
 infiniStatus_t launch_bias_grad_kernel(const void *grad_output, void *grad_bias,
                                        const int *grad_output_dims,
                                        size_t conv_ndim,
-                                       cudnnDataType_t data_type,
-                                       cudaStream_t stream) {
+                                       hcdnnDataType_t data_type,
+                                       hcStream_t stream) {
+  // 只处理 bf16 类型
+  if (data_type != HCDNN_DATA_BFLOAT16) {
+    return INFINI_STATUS_BAD_TENSOR_DTYPE;
+  }
 
-    int batch_size = grad_output_dims[0];
-    int channels = grad_output_dims[1];
-    int spatial_size = 1;
+  int batch_size = grad_output_dims[0];
+  int channels = grad_output_dims[1];
+  int spatial_size = 1;
 
-    switch (conv_ndim) {
-    case 1:
-        spatial_size = grad_output_dims[2];
-        break;
-    case 2:
-        spatial_size = grad_output_dims[2] * grad_output_dims[3];
-        break;
-    case 3:
-        spatial_size = grad_output_dims[2] * grad_output_dims[3] * grad_output_dims[4];
-        break;
-    default:
-        printf("ERROR: Unsupported convolution dimension: %zu\n", conv_ndim);
-        return INFINI_STATUS_BAD_PARAM;
-    }
+  // 计算空间维度大小
+  for (size_t i = 2; i < conv_ndim + 2; ++i) {
+    spatial_size *= grad_output_dims[i];
+  }
 
-    dim3 block(256);
-    dim3 grid((channels + block.x - 1) / block.x);
+  dim3 block(256);
+  dim3 grid((channels + block.x - 1) / block.x);
 
-    compute_bias_grad_kernel<<<grid, block, 0, stream>>>(
-        grad_output, grad_bias, batch_size, channels, spatial_size, data_type);
+  // 直接调用 bf16 kernel
+  compute_bias_grad_kernel<__hpcc_bfloat16><<<grid, block, 0, stream>>>(
+      reinterpret_cast<const __hpcc_bfloat16 *>(grad_output),
+      reinterpret_cast<__hpcc_bfloat16 *>(grad_bias), batch_size, channels,
+      spatial_size);
 
-    cudaError_t launch_error = cudaGetLastError();
-    if (launch_error != cudaSuccess) {
-        printf("ERROR: Kernel launch failed: %s\n",
-               cudaGetErrorString(launch_error));
-        return INFINI_STATUS_INTERNAL_ERROR;
-    }
-
-    return INFINI_STATUS_SUCCESS;
+  return INFINI_STATUS_SUCCESS;
 }
 
 #define DESTROY_HCDNN_DESCRIPTOR(desc_ptr, destroy_func) \
@@ -85,6 +75,7 @@ struct Descriptor::Opaque {
     hcdnnConvolutionBwdFilterAlgo_t bwd_filter_algo;
     size_t bwd_data_workspace_size = 0;
     size_t bwd_filter_workspace_size = 0;
+    size_t conv_ndim = 0;
 #endif
 
 private:
@@ -283,6 +274,7 @@ private:
 
         // 工作空间大小取两者最大值
         workspace_size = std::max(bwd_data_workspace_size, bwd_filter_workspace_size);
+        conv_ndim = info.ndim;
         return INFINI_STATUS_SUCCESS;
     }
 #endif
@@ -294,6 +286,7 @@ public:
 #ifdef ENABLE_HCDNN_API
           ,
           input_desc(other.input_desc), grad_output_desc(other.grad_output_desc), weight_desc(other.weight_desc), grad_input_desc(other.grad_input_desc), grad_weight_desc(other.grad_weight_desc), grad_bias_desc(other.grad_bias_desc), conv_desc(other.conv_desc), bwd_data_algo(other.bwd_data_algo), bwd_filter_algo(other.bwd_filter_algo), bwd_data_workspace_size(other.bwd_data_workspace_size), bwd_filter_workspace_size(other.bwd_filter_workspace_size)
+            , conv_ndim(other.conv_ndim)
 #endif
     {
 #ifdef ENABLE_HCDNN_API
@@ -308,6 +301,7 @@ public:
         other.bwd_filter_algo = static_cast<hcdnnConvolutionBwdFilterAlgo_t>(0);
         other.bwd_data_workspace_size = 0;
         other.bwd_filter_workspace_size = 0;
+        other.conv_ndim = 0;
 #endif
         other.workspace_size = 0;
     }
@@ -434,7 +428,7 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
             if (grad_output_type == HCDNN_DATA_BFLOAT16) {
                 CHECK_STATUS(launch_bias_grad_kernel(
                     grad_output, grad_bias, grad_output_dims, _opaque->conv_ndim,
-                    grad_output_type, (cudaStream_t)stream));
+                    grad_output_type, (hcStream_t)stream));
             } else {
                 CHECK_MCDNN(hcdnnConvolutionBackwardBias(
                     handle,
