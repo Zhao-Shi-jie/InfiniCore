@@ -491,109 +491,6 @@ def conv_(lib):
     ]
 
 @OpRegister.operator
-def interpolate_nearest_(lib):
-    lib.infiniopCreateInterpolateNearestDescriptor.restype = c_int32
-    lib.infiniopCreateInterpolateNearestDescriptor.argtypes = [
-        infiniopHandle_t,
-        POINTER(infiniopOperatorDescriptor_t),
-        infiniopTensorDescriptor_t,  # output_desc
-        infiniopTensorDescriptor_t,  # input_desc
-    ]
-
-    lib.infiniopGetInterpolateNearestWorkspaceSize.restype = c_int32
-    lib.infiniopGetInterpolateNearestWorkspaceSize.argtypes = [
-        infiniopOperatorDescriptor_t,
-        POINTER(c_size_t),
-    ]
-
-    lib.infiniopInterpolateNearest.restype = c_int32
-    lib.infiniopInterpolateNearest.argtypes = [
-        infiniopOperatorDescriptor_t,  # descriptor
-        c_void_p,                      # workspace
-        c_size_t,                      # workspace_size
-        c_void_p,                      # output
-        c_void_p,                      # input
-        c_void_p,                      # stream
-    ]
-
-    lib.infiniopDestroyInterpolateNearestDescriptor.restype = c_int32
-    lib.infiniopDestroyInterpolateNearestDescriptor.argtypes = [
-        infiniopOperatorDescriptor_t,
-    ]
-
-@OpRegister.operator
-def max_pool_(lib):
-    lib.infiniopCreateMaxPoolDescriptor.restype = c_int32
-    lib.infiniopCreateMaxPoolDescriptor.argtypes = [
-        infiniopHandle_t,
-        POINTER(infiniopOperatorDescriptor_t),
-        infiniopTensorDescriptor_t,  # output_desc
-        infiniopTensorDescriptor_t,  # input_desc
-        c_void_p,                    # kernel_size
-        c_void_p,                    # strides
-        c_void_p,                    # pads
-        c_bool,                      # ceil_mode
-    ]
-
-    lib.infiniopGetMaxPoolWorkspaceSize.restype = c_int32
-    lib.infiniopGetMaxPoolWorkspaceSize.argtypes = [
-        infiniopOperatorDescriptor_t,
-        POINTER(c_size_t),
-    ]
-
-    lib.infiniopMaxPool.restype = c_int32
-    lib.infiniopMaxPool.argtypes = [
-        infiniopOperatorDescriptor_t,  # descriptor
-        c_void_p,                      # workspace
-        c_size_t,                      # workspace_size
-        c_void_p,                      # output
-        c_void_p,                      # input
-        c_void_p,                      # stream
-    ]
-
-    lib.infiniopDestroyMaxPoolDescriptor.restype = c_int32
-    lib.infiniopDestroyMaxPoolDescriptor.argtypes = [
-        infiniopOperatorDescriptor_t,
-    ]
-
-@OpRegister.operator
-def max_pool_backward_(lib):
-    lib.infiniopCreateMaxPoolBackwardDescriptor.restype = c_int32
-    lib.infiniopCreateMaxPoolBackwardDescriptor.argtypes = [
-        infiniopHandle_t,
-        POINTER(infiniopOperatorDescriptor_t),
-        infiniopTensorDescriptor_t,  # grad_input_desc
-        infiniopTensorDescriptor_t,  # grad_output_desc
-        infiniopTensorDescriptor_t,  # input_desc
-        c_void_p,                    # kernel_size
-        c_void_p,                    # strides
-        c_void_p,                    # pads
-        c_bool,                      # ceil_mode
-    ]
-
-    lib.infiniopGetMaxPoolBackwardWorkspaceSize.restype = c_int32
-    lib.infiniopGetMaxPoolBackwardWorkspaceSize.argtypes = [
-        infiniopOperatorDescriptor_t,
-        POINTER(c_size_t),
-    ]
-
-    lib.infiniopMaxPoolBackward.restype = c_int32
-    lib.infiniopMaxPoolBackward.argtypes = [
-        infiniopOperatorDescriptor_t,  # descriptor
-        c_void_p,                      # workspace
-        c_size_t,                      # workspace_size
-        c_void_p,                      # grad_input
-        c_void_p,                      # grad_output
-        c_void_p,                      # input
-        c_void_p,                      # stream
-    ]
-
-    lib.infiniopDestroyMaxPoolBackwardDescriptor.restype = c_int32
-    lib.infiniopDestroyMaxPoolBackwardDescriptor.argtypes = [
-        infiniopOperatorDescriptor_t,
-    ]
-
-@OpRegister.operator
 def avg_pool_(lib):
     lib.infiniopCreateAvgPoolDescriptor.restype = c_int32
     lib.infiniopCreateAvgPoolDescriptor.argtypes = [
@@ -698,4 +595,147 @@ def cross_entropy_loss_(lib):
     lib.infiniopDestroyCrossEntropyLossDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
-    
+
+@OpRegister.operator
+def interpolate_nearest_(lib):
+    lib.infiniopCreateInterpolateNearestDescriptor.restype = c_int32
+    lib.infiniopCreateInterpolateNearestDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+    ]
+
+    lib.infiniopGetInterpolateNearestWorkspaceSize.restype = c_int32
+    lib.infiniopGetInterpolateNearestWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopInterpolateNearest.restype = c_int32
+    lib.infiniopInterpolateNearest.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyInterpolateNearestDescriptor.restype = c_int32
+    lib.infiniopDestroyInterpolateNearestDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+@OpRegister.operator
+def max_pool_(lib):
+    lib.infiniopCreateMaxPoolDescriptor.restype = c_int32
+    lib.infiniopCreateMaxPoolDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        c_void_p,                    # kernel_size
+        c_void_p,                    # strides
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
+    ]
+
+    lib.infiniopGetMaxPoolWorkspaceSize.restype = c_int32
+    lib.infiniopGetMaxPoolWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopMaxPool.restype = c_int32
+    lib.infiniopMaxPool.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyMaxPoolDescriptor.restype = c_int32
+    lib.infiniopDestroyMaxPoolDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+@OpRegister.operator
+def max_pool_backward_(lib):
+    lib.infiniopCreateMaxPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopCreateMaxPoolBackwardDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # grad_input_desc
+        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        c_void_p,                    # kernel_size
+        c_void_p,                    # strides
+        c_void_p,                    # pads
+        c_bool,                      # ceil_mode
+    ]
+
+    lib.infiniopGetMaxPoolBackwardWorkspaceSize.restype = c_int32
+    lib.infiniopGetMaxPoolBackwardWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopMaxPoolBackward.restype = c_int32
+    lib.infiniopMaxPoolBackward.argtypes = [
+        infiniopOperatorDescriptor_t,  # descriptor
+        c_void_p,                      # workspace
+        c_size_t,                      # workspace_size
+        c_void_p,                      # grad_input
+        c_void_p,                      # grad_output
+        c_void_p,                      # input
+        c_void_p,                      # stream
+    ]
+
+    lib.infiniopDestroyMaxPoolBackwardDescriptor.restype = c_int32
+    lib.infiniopDestroyMaxPoolBackwardDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+@OpRegister.operator
+def conv_backward_(lib):
+    lib.infiniopCreateConvBackwardDescriptor.restype = c_int32
+    lib.infiniopCreateConvBackwardDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,  # grad_output_desc
+        infiniopTensorDescriptor_t,  # input_desc
+        infiniopTensorDescriptor_t,  # weight_desc
+        infiniopTensorDescriptor_t,  # bias_desc (can be None)
+        c_void_p,                    # pads
+        c_void_p,                    # strides
+        c_void_p,                    # dilations
+        c_size_t,                    # ndim
+    ]
+
+    lib.infiniopGetConvBackwardWorkspaceSize.restype = c_int32
+    lib.infiniopGetConvBackwardWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopConvBackward.restype = c_int32
+    lib.infiniopConvBackward.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,      # workspace
+        c_size_t,      # workspace_size
+        c_void_p,      # grad_input
+        c_void_p,      # grad_weight
+        c_void_p,      # grad_bias
+        c_void_p,      # grad_output
+        c_void_p,      # input
+        c_void_p,      # weight
+        c_void_p,      # stream
+    ]
+
+    lib.infiniopDestroyConvBackwardDescriptor.restype = c_int32
+    lib.infiniopDestroyConvBackwardDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
