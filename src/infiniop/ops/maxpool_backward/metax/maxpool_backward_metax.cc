@@ -227,11 +227,6 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
   CHECK_STATUS(_opaque->internal->useMcdnn(
       (hcStream_t)stream, [&](hcdnnHandle_t handle) {
-        // size_t grad_input_size = 0;
-        // CHECK_MCDNN(hcdnnGetTensorSizeInBytes(_opaque->grad_input_desc, &grad_input_size));
-        // CHECK_HC(hcMemset(grad_input, 0, grad_input_size));
-        // CHECK_HC(hcMemset(workspace, 0, _workspace_size));
-
         void *temp_output = workspace;
         CHECK_MCDNN(hcdnnPoolingForward(
             handle, _opaque->pooling_backward_desc, &alpha,

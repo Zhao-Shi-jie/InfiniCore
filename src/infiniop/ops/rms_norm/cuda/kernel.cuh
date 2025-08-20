@@ -22,7 +22,7 @@ __device__ void rmsnormBlock(
     // Thread_0 computes RMS=1/sqrt(ss/dim+epsilon) and stores in shared memory
     __shared__ Tcompute rms;
     if (threadIdx.x == 0) {
-        rms = Tdata(rsqrtf(ss / Tcompute(dim) + epsilon));
+        rms = Tcompute(rsqrtf(ss / Tcompute(dim) + epsilon));
     }
     __syncthreads();
 
