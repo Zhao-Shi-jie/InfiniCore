@@ -21,34 +21,28 @@ from libinfiniop import (
 )
 from torch.nn import functional as F
 
-# _TEST_CASES = [
-#     ((4, 100),),           # 标准 2D 分类，(N, C)
-#     ((2, 10, 32, 32),),    # 4D 图像分类，(N, C, H, W)
-#     ((1, 5, 4, 4),),       # 小 batch 小图，低精度验证
-#     ((3, 7, 8),),          # 3D logits，模拟 (N, C, L)
-#     ((2, 6, 2, 3, 3),),    # 5D logits，模拟 3D 卷积输出
-# ]
-
+# 修正测例，确保 logits 维度与类别数匹配
 _TEST_CASES = [
-    # --- 1D ---
-    # ((10,),),                     # 单样本分类, (C,)
-    # ((1000,),),                   # 单样本分类, 类别数较多
-
-    # --- 2D ---
-    ((4, 10),),                    # 标准 2D 分类, (N, C)
-    ((8, 5),),                     # 2D 分类, 不同批量和类别数
-    ((16, 100),),                  # 2D 分类, (N, C)
-    ((32, 1000),),                 # 2D 分类, 较大批量和类别数
-    ((128, 50),),                  # 2D 分类, 大批量
-
-    # --- 3D ---
-    ((4, 10, 5),),                 # 3D 序列分类, 模拟 (N, C, L)
-
-    # --- 4D ---
-    ((2, 8, 8, 8),),               # 4D 图像分割, 模拟 (N, C, H, W)
-
-    # --- 5D ---
-    ((3, 10, 10, 20, 30),),       # 5D 视频或 3D 分割, (N, C, D, H, W)
+    # Single sample classification
+    ((10,), 10),
+    ((200,), 200),  # 修正：200个类别对应200个logits
+    
+    # 2D: (N, C) - batch classification
+    ((4, 10), 10),
+    ((8, 5), 5),
+    ((16, 100), 100),
+    ((32, 1000), 1000),
+    ((64, 21), 21),
+    ((128, 50), 50),
+    
+    # 3D: (N, C, d1) - sequence classification
+    ((4, 10, 5), 10),
+    
+    # 4D: (N, C, d1, d2) - image segmentation
+    ((2, 8, 8, 8), 8),
+    
+    # 5D: (N, C, d1, d2, d3) - 3D segmentation
+    ((3, 10, 10, 20, 30), 10),
 ]
 
 _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16, InfiniDtype.BF16]
@@ -60,68 +54,51 @@ _TOLERANCE_MAP = {
 DEBUG = False
 PROFILE = False
 
-def cross_entropy_loss_pytorch(logits, target, loss_tensor):
-    loss_ref = F.cross_entropy(logits, target.long(), reduction="none")
-    loss_tensor.copy_(loss_ref)
-
-def get_strides(shape):
-    if not shape: return tuple()
-    strides = [1]
-    for s in reversed(shape[1:]):
-        strides.insert(0, strides[0] * s)
-    return tuple(strides)
+def cross_entropy_loss_pytorch(logits, target):
+    """使用PyTorch计算交叉熵损失，使用双精度并且reduction='mean'"""
+    return F.cross_entropy(logits.double(), target.long(), reduction="mean")
 
 def test(
-    handle, device, logits_shape,
+    handle, device, input_shape, num_classes,
     tensor_dtype=InfiniDtype.F32, sync=None,
 ):
-    target_shape = (logits_shape[0],) + logits_shape[2:]
-    loss_shape = target_shape
+    # 根据输入形状确定logits和target的形状
+    if len(input_shape) == 1:
+        # Shape (C,) - single sample classification
+        logits_shape = (num_classes,)
+        target_shape = (1,)  # 修改：使用 (1,) 而不是标量
+    else:
+        # Shape (N, C, [d1], [d2], ...)
+        logits_shape = input_shape
+        target_shape = (input_shape[0],) + input_shape[2:]
 
-    print(f"Testing CrossEntropyLoss on {InfiniDeviceNames[device]} with logits_shape: {logits_shape}, dtype:{InfiniDtypeNames[tensor_dtype]}")
+    print(f"Testing CrossEntropyLoss on {InfiniDeviceNames[device]} with logits_shape: {logits_shape}, target_shape: {target_shape}, dtype:{InfiniDtypeNames[tensor_dtype]}")
 
-    logits = TestTensor(logits_shape, get_strides(logits_shape), dt=tensor_dtype, device=device)
-    loss = TestTensor(loss_shape, get_strides(loss_shape), dt=tensor_dtype, device=device)
+    # 创建logits张量
+    logits = TestTensor(logits_shape, None, dt=tensor_dtype, device=device)
     
-    num_classes = logits_shape[1]
+    # 创建target张量
     target_torch = torch.randint(0, num_classes, target_shape, dtype=torch.int, device=logits.torch_tensor().device)
     target = TestTensor.from_torch(target_torch, dt=InfiniDtype.I32, device=device)
-
-    cross_entropy_loss_pytorch(logits.torch_tensor(), target.torch_tensor(), loss.torch_tensor())
-    if sync: sync()
-
-    logits_torch = logits.torch_tensor()
-    target_torch = target.torch_tensor()
-    softmax_probs = torch.softmax(logits_torch, dim=1)
     
-    # 展平 logits 和 target，以逐位置检查
-    # (N, C, H, W) → N * H * W 个位置，每个位置有 C 个 logit
-    N = logits_shape[0]
-    C = logits_shape[1]
-    spatial_size = int(torch.tensor(logits_shape[2:]).prod().item()) if len(logits_shape) > 2 else 1
+    # 创建loss张量
+    loss = TestTensor((1,), None, dt=tensor_dtype, device=device)
 
-    for i in range(min(10, N * spatial_size)):
-        n = i // spatial_size
-        s = i % spatial_size
-        if len(logits_shape) == 2:
-            # (N, C)
-            t = target_torch[n]
-            prob = softmax_probs[n, t]
-        elif len(logits_shape) >= 3:
-            # 通用高维结构：(N, C, D1, D2, ..., Dn)
-            spatial_indices = []
-            remaining = s
-            for dim in reversed(logits_shape[2:]):
-                spatial_indices.insert(0, remaining % dim)
-                remaining //= dim
-            t = target_torch[(n, *spatial_indices)]
-            prob = softmax_probs[(n, t.item(), *spatial_indices)]
+    # 计算PyTorch参考损失
+    if len(input_shape) == 1:
+        # 对于一维logits，target需要是标量
+        target_scalar = target.torch_tensor()[0]
+        pytorch_loss = cross_entropy_loss_pytorch(logits.torch_tensor(), target_scalar)
+    else:
+        pytorch_loss = cross_entropy_loss_pytorch(logits.torch_tensor(), target.torch_tensor())
+    
+    # 将参考结果存储到loss张量
+    loss.torch_tensor()[0] = pytorch_loss.to(loss.torch_tensor().dtype)
+    
+    if sync: 
+        sync()
 
-        
-        loss_val = -torch.log(prob)
-        # print(f"[DEBUG] idx={i} target={t.item()} prob={prob.item():.6f} loss={loss_val.item():.6f}")
-
-
+    # 创建算子描述符
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
         LIBINFINIOP.infiniopCreateCrossEntropyLossDescriptor(
@@ -129,6 +106,8 @@ def test(
             loss.descriptor, logits.descriptor, target.descriptor,
         )
     )
+    
+    # 获取工作空间大小并执行
     workspace_size = c_uint64(0)
     check_error(
         LIBINFINIOP.infiniopGetCrossEntropyLossWorkspaceSize(
@@ -143,18 +122,29 @@ def test(
         )
     )
 
-    if sync: sync()
-    atol, rtol = get_tolerance(_TOLERANCE_MAP, tensor_dtype)
-    actual_flat = loss.actual_tensor().flatten()
-    torch_flat = loss.torch_tensor().flatten()
-
-    if not torch.allclose(actual_flat, torch_flat, atol=atol, rtol=rtol):
-        print("--- ERROR ANALYSIS ---")
-        print("Target (flattened):", target.torch_tensor().flatten()[:10])
-        print("实际输出 (flattened):", actual_flat[:10])
-        print("参考输出 (flattened):", torch_flat[:10])
+    if sync: 
+        sync()
     
-    assert torch.allclose(actual_flat, torch_flat, atol=atol, rtol=rtol)
+    # 验证结果
+    atol, rtol = get_tolerance(_TOLERANCE_MAP, tensor_dtype)
+    actual_loss = loss.actual_tensor()[0]
+    expected_loss = loss.torch_tensor()[0]
+
+    if DEBUG:
+        print(f"Expected loss: {expected_loss.item()}")
+        print(f"Actual loss: {actual_loss.item()}")
+        if target_shape:
+            print(f"Target shape: {target_shape}, first few targets: {target.torch_tensor().flatten()[:5]}")
+        else:
+            print(f"Target (scalar): {target.torch_tensor()[0].item()}")
+
+    if not torch.allclose(actual_loss, expected_loss, atol=atol, rtol=rtol):
+        print("--- ERROR ANALYSIS ---")
+        print(f"Expected: {expected_loss.item()}, Actual: {actual_loss.item()}")
+        print(f"Difference: {abs(actual_loss - expected_loss).item()}")
+        print(f"Tolerance: atol={atol}, rtol={rtol}")
+    
+    assert torch.allclose(actual_loss, expected_loss, atol=atol, rtol=rtol)
     check_error(LIBINFINIOP.infiniopDestroyCrossEntropyLossDescriptor(descriptor))
 
 if __name__ == "__main__":

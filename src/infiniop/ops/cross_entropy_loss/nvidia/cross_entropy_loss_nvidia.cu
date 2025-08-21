@@ -13,55 +13,53 @@
 namespace op::cross_entropy_loss::nvidia {
 namespace cuda {
 
-// 通用 CrossEntropyLoss kernel：支持 logits shape = (N, C, D1, ..., Dn)，row-major
-// 显式展开 idx 为 (n, d1, ..., dn)，并在 dim=1 上执行 softmax
-
 template <typename T_in, typename T_out>
 __global__ void softmaxCrossEntropy_generic(
-    T_out* loss,
+    T_out* loss,               // 输出：逐元素损失（与target同形状）
     const T_in* logits,
     const int* target,
     int N, int C, long long inner_size) {
 
     long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     long long total_elements = N * inner_size;
-    if (idx >= total_elements) return;
+    if (idx >= total_elements) return;  // 严格越界检查
 
     int n = idx / inner_size;
-    int inner_idx = idx % inner_size; // index within spatial dims
-
+    int inner_idx = idx % inner_size;
     int tgt = target[idx];
-    if (tgt < 0 || tgt >= C) {
-        loss[idx] = static_cast<T_out>(1e9f);
+
+    // 处理PyTorch默认忽略索引（-100）
+    const int ignore_index = -100;
+    if (tgt == ignore_index) {
+        loss[idx] = static_cast<T_out>(0.0f);  // 忽略的位置损失设为0
         return;
     }
 
-    // offset for (n, c, ...), base index is (n * C + c) * inner_size + inner_idx
+    // 处理无效类别（超出范围）
+    if (tgt < 0 || tgt >= C) {
+        loss[idx] = static_cast<T_out>(1e9f);  // 错误标记
+        return;
+    }
+
+    // 计算Softmax（数值稳定版）
     float max_val = -CUDART_INF_F;
     for (int c = 0; c < C; ++c) {
         long long offset = ((long long)n * C + c) * inner_size + inner_idx;
-        float val = static_cast<float>(logits[offset]);
-        if (val > max_val) max_val = val;
+        max_val = fmaxf(max_val, static_cast<float>(logits[offset]));
     }
 
-    float sum_exp = 0.f;
+    float sum_exp = 0.0f;
     for (int c = 0; c < C; ++c) {
         long long offset = ((long long)n * C + c) * inner_size + inner_idx;
         sum_exp += expf(static_cast<float>(logits[offset]) - max_val);
     }
 
+    // 计算交叉熵
     long long tgt_offset = ((long long)n * C + tgt) * inner_size + inner_idx;
     float logit_tgt = static_cast<float>(logits[tgt_offset]);
     float prob = expf(logit_tgt - max_val) / sum_exp;
-    float ce = -logf(prob);
-
-    loss[idx] = static_cast<T_out>(ce);
-
-    // if (idx < 10) {
-    //     printf("[DEBUG] idx=%lld target=%d prob=%.6f loss=%.6f\n", idx, tgt, prob, ce);
-    // }
+    loss[idx] = static_cast<T_out>(-logf(prob));
 }
-
 } // namespace cuda
 
 struct Descriptor::Opaque {
@@ -88,10 +86,18 @@ infiniStatus_t Descriptor::create(
     auto dtype = logits_desc->dtype();
     CHECK_DTYPE(dtype, INFINI_DTYPE_F32, INFINI_DTYPE_F16, INFINI_DTYPE_BF16);
 
-    const auto &logits_shape = logits_desc->shape();
+    const auto &original_logits_shape = logits_desc->shape();
     auto opaque = new Opaque(handle->internal());
-    opaque->logits_shape = logits_shape;
+    
+    // 处理一维情况：将 (C,) 扩展为 (1, C)
+    if (original_logits_shape.size() == 1) {
+        opaque->logits_shape = {1, original_logits_shape[0]};  // (C,) -> (1, C)
+    } else {
+        opaque->logits_shape = original_logits_shape;
+    }
 
+    // 使用扩展后的形状计算工作空间
+    const auto &logits_shape = opaque->logits_shape;
     long long total_elements = logits_shape[0];
     for (size_t i = 2; i < logits_shape.size(); ++i)
         total_elements *= logits_shape[i];
@@ -109,19 +115,21 @@ infiniStatus_t Descriptor::calculate(
     const void *logits, const void *target, void *stream) const {
 
 #ifdef ENABLE_NVIDIA_API
+    // 使用扩展后的形状（已经处理了一维->二维的转换）
     const auto &shape = _opaque->logits_shape;
-    if (shape.size() < 2) return INFINI_STATUS_NOT_SUPPORTED;
-
+    
     int N = shape[0];
     int C = shape[1];
     long long inner_size = 1;
     for (size_t i = 2; i < shape.size(); ++i)
         inner_size *= shape[i];
-
     long long total_elements = N * inner_size;
+
+    // 第一步：调用核函数计算逐元素损失
     dim3 blockSize(256);
     dim3 gridSize((total_elements + blockSize.x - 1) / blockSize.x);
 
+    // 根据数据类型调用核函数
     if (_dtype == INFINI_DTYPE_F32) {
         cuda::softmaxCrossEntropy_generic<float, float><<<gridSize, blockSize, 0, (cudaStream_t)stream>>>(
             (float*)loss, (const float*)logits, (const int*)target,
@@ -136,10 +144,65 @@ infiniStatus_t Descriptor::calculate(
             N, C, inner_size);
     }
 
+    // 第二步：计算均值（代码保持不变）
+    std::vector<int> h_target(total_elements);
+    cudaMemcpyAsync(h_target.data(), target, total_elements * sizeof(int), cudaMemcpyDeviceToHost, (cudaStream_t)stream);
+
+    float total_sum = 0.0f;
+    int valid_count = 0;
+    const int ignore_index = -100;
+
+    if (_dtype == INFINI_DTYPE_F32) {
+        std::vector<float> h_loss(total_elements);
+        cudaMemcpyAsync(h_loss.data(), loss, total_elements * sizeof(float), cudaMemcpyDeviceToHost, (cudaStream_t)stream);
+        cudaStreamSynchronize((cudaStream_t)stream);
+        
+        for (long long i = 0; i < total_elements; ++i) {
+            if (h_target[i] != ignore_index) {
+                total_sum += h_loss[i];
+                valid_count++;
+            }
+        }
+        
+        float mean_loss = (valid_count > 0) ? (total_sum / valid_count) : 0.0f;
+        cudaMemcpyAsync(loss, &mean_loss, sizeof(float), cudaMemcpyHostToDevice, (cudaStream_t)stream);
+        
+    } else if (_dtype == INFINI_DTYPE_F16) {
+        std::vector<half> h_loss(total_elements);
+        cudaMemcpyAsync(h_loss.data(), loss, total_elements * sizeof(half), cudaMemcpyDeviceToHost, (cudaStream_t)stream);
+        cudaStreamSynchronize((cudaStream_t)stream);
+        
+        for (long long i = 0; i < total_elements; ++i) {
+            if (h_target[i] != ignore_index) {
+                total_sum += __half2float(h_loss[i]);
+                valid_count++;
+            }
+        }
+        
+        float mean_loss_f = (valid_count > 0) ? (total_sum / valid_count) : 0.0f;
+        half mean_loss = __float2half(mean_loss_f);
+        cudaMemcpyAsync(loss, &mean_loss, sizeof(half), cudaMemcpyHostToDevice, (cudaStream_t)stream);
+        
+    } else if (_dtype == INFINI_DTYPE_BF16) {
+        std::vector<__nv_bfloat16> h_loss(total_elements);
+        cudaMemcpyAsync(h_loss.data(), loss, total_elements * sizeof(__nv_bfloat16), cudaMemcpyDeviceToHost, (cudaStream_t)stream);
+        cudaStreamSynchronize((cudaStream_t)stream);
+        
+        for (long long i = 0; i < total_elements; ++i) {
+            if (h_target[i] != ignore_index) {
+                total_sum += __bfloat162float(h_loss[i]);
+                valid_count++;
+            }
+        }
+        
+        float mean_loss_f = (valid_count > 0) ? (total_sum / valid_count) : 0.0f;
+        __nv_bfloat16 mean_loss = __float2bfloat16(mean_loss_f);
+        cudaMemcpyAsync(loss, &mean_loss, sizeof(__nv_bfloat16), cudaMemcpyHostToDevice, (cudaStream_t)stream);
+    }
+
     return INFINI_STATUS_SUCCESS;
 #else
     return INFINI_STATUS_NOT_IMPLEMENTED;
 #endif
 }
-
 } // namespace op::cross_entropy_loss::nvidia
