@@ -78,8 +78,8 @@ def test(
     logits = TestTensor(logits_shape, None, dt=tensor_dtype, device=device)
     
     # 创建target张量
-    target_torch = torch.randint(0, num_classes, target_shape, dtype=torch.int, device=logits.torch_tensor().device)
-    target = TestTensor.from_torch(target_torch, dt=InfiniDtype.I32, device=device)
+    target_torch = torch.randint(0, num_classes, target_shape, dtype=torch.long, device=logits.torch_tensor().device)
+    target = TestTensor.from_torch(target_torch, dt=InfiniDtype.I64, device=device)
     
     # 创建loss张量
     loss = TestTensor((1,), None, dt=tensor_dtype, device=device)

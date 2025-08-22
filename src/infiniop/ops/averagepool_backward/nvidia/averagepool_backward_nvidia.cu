@@ -125,7 +125,7 @@ private:
         }
 
         CHECK_CUDNN(cudnnSetPoolingNdDescriptor(
-            pooling_backward_desc, CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING, CUDNN_NOT_PROPAGATE_NAN,
+            pooling_backward_desc, CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING, CUDNN_NOT_PROPAGATE_NAN,
             kernel_vec.size(), kernel_vec.data(), pad_vec.data(),
             stride_vec.data()));
 

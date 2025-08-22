@@ -10,175 +10,155 @@ struct Test::Attributes {
     // 输入张量
     std::shared_ptr<Tensor> logits;
     std::shared_ptr<Tensor> target;
-    std::shared_ptr<Tensor> expected_output;
-
-    // 可选属性，保留用于验证
-    bool has_weight;
-    std::shared_ptr<Tensor> weight;
-    int reduction;
-    int ignore_index;
-    float label_smoothing;
+    std::shared_ptr<Tensor> loss;
 };
 
+// build 方法：从 gguf 文件中解析张量和属性
 std::shared_ptr<Test> Test::build(
     std::unordered_map<std::string, std::vector<uint8_t>> attributes,
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors,
     double rtol, double atol) {
 
+    // 打印调试信息，确认 build 方法被调用
     std::cout << "DEBUG: cross_entropy_loss::Test::build called" << std::endl;
 
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
 
-    if (!check_names(attributes, Test::attribute_names()) || !check_names(tensors, Test::tensor_names())) {
-        throw std::runtime_error("Invalid Test");
+    // 检查必需的张量是否存在
+    if (!check_names(tensors, Test::tensor_names()) || !check_names(attributes, Test::attribute_names()) ) {
+        throw std::runtime_error("Invalid Test: Missing required tensors.");
     }
 
     test->_attributes->logits = tensors["logits"];
     test->_attributes->target = tensors["target"];
-    test->_attributes->expected_output = tensors["output"];
+    test->_attributes->loss = tensors["loss"];
 
-    // weight
-    if (tensors.find("weight") != tensors.end()) {
-        test->_attributes->weight = tensors["weight"];
-        test->_attributes->has_weight = true;
-    } else {
-        test->_attributes->has_weight = false;
+    // 新增：打印 target 前几个元素
+    std::cout << "DEBUG: target 张量前5个元素: ";
+    auto targetTensor = test->_attributes->target;
+    const int64_t* data = static_cast<const int64_t*>(targetTensor->data()); // 按实际类型调整
+    for (size_t i = 0; i < 3; ++i) {
+        std::cout << data[i] << " ";
     }
+    std::cout << std::endl;
 
-    // reduction
-    if (attributes.find("reduction") != attributes.end() && attributes["reduction"].size() == sizeof(int)) {
-        test->_attributes->reduction = *reinterpret_cast<const int*>(attributes["reduction"].data());
-    } else {
-        test->_attributes->reduction = 1; // default: mean
-    }
-
-    // ignore_index
-    if (attributes.find("ignore_index") != attributes.end() && attributes["ignore_index"].size() == sizeof(int)) {
-        test->_attributes->ignore_index = *reinterpret_cast<const int*>(attributes["ignore_index"].data());
-    } else {
-        test->_attributes->ignore_index = -100;
-    }
-
-    // label_smoothing
-    if (attributes.find("label_smoothing") != attributes.end() && attributes["label_smoothing"].size() == sizeof(float)) {
-        test->_attributes->label_smoothing = *reinterpret_cast<const float*>(attributes["label_smoothing"].data());
-    } else {
-        test->_attributes->label_smoothing = 0.0f;
-    }
-
-    std::cout << "DEBUG: build finished" << std::endl;
     return test;
 }
 
+// run 方法：执行算子并验证结果
 std::shared_ptr<infiniop_test::Result> Test::run(
     infiniopHandle_t handle, infiniDevice_t device, int device_id,
     size_t warm_ups, size_t iterations) {
 
     infiniopCrossEntropyLossDescriptor_t op_desc;
 
+    // 将输入张量移动到目标设备
     auto logits = _attributes->logits->to(device, device_id);
     auto target = _attributes->target->to(device, device_id);
-    auto expected_output = _attributes->expected_output;
+    auto loss = _attributes->loss;
 
-    auto output_shape = expected_output->shape();
+    // 根据期望输出的形状创建实际输出张量
+    auto output_shape = loss->shape();
     size_t output_size = 1;
-    for (auto dim : output_shape) output_size *= dim;
+    for (auto dim : output_shape) {
+        output_size *= dim;
+    }
     output_size *= ggmlTypeSize(logits->ggml_type());
 
     auto output_memory = std::make_shared<Memory>(output_size, device, device_id);
     std::vector<ptrdiff_t> output_strides(output_shape.size());
-    if (!output_shape.empty()) {
-        output_strides.back() = 1;
+    if (output_shape.size() > 0) {
+        output_strides[output_shape.size() - 1] = 1;
         for (int i = output_shape.size() - 2; i >= 0; i--) {
-            output_strides[i] = output_strides[i+1] * output_shape[i+1];
+            output_strides[i] = output_strides[i + 1] * output_shape[i + 1];
         }
     }
-
     auto actual_output = std::make_shared<Tensor>(
-        output_memory, 0, output_shape, output_strides, logits->ggml_type()
-    );
+        output_memory, 0, output_shape, output_strides, logits->ggml_type());
 
-    std::cout << "DEBUG: Creating cross_entropy_loss descriptor..." << std::endl;
+    // 1. 创建算子描述符
+    std::cout << "DEBUG: Creating cross entropy loss descriptor..." << std::endl;
     CHECK_OR(infiniopCreateCrossEntropyLossDescriptor(
                  handle, &op_desc,
                  actual_output->desc(),
                  logits->desc(),
                  target->desc()),
-             return TEST_FAILED(OP_CREATION_FAILED, "Failed to create cross_entropy_loss descriptor."));
+             return TEST_FAILED(OP_CREATION_FAILED, "Failed to create cross entropy loss descriptor."));
 
-    // --- 获取 workspace 大小 ---
-    size_t workspace_size = 0;
+    // 2. 获取并分配工作空间
+    size_t workspace_size;
     CHECK_OR(infiniopGetCrossEntropyLossWorkspaceSize(op_desc, &workspace_size),
-            return TEST_FAILED(OP_CREATION_FAILED, "Failed to get workspace size."));
+             return TEST_FAILED(OP_CREATION_FAILED, "Failed to get workspace size."));
 
-    void* workspace_ptr = nullptr;
-    std::shared_ptr<Memory> workspace_memory;
+    void *workspace = nullptr;
     if (workspace_size > 0) {
-        workspace_memory = std::make_shared<Memory>(workspace_size, device, device_id);
-        workspace_ptr = workspace_memory->ptr();  // <-- 这里根据 Memory 类接口改
+        CHECK_OR(infinirtMalloc(&workspace, workspace_size),
+                 return TEST_FAILED(OP_CREATION_FAILED, "Failed to allocate workspace."));
     }
 
-    // 执行算子
+    // 3. 执行计算
     CHECK_OR(infiniopCrossEntropyLoss(
-                op_desc,
-                workspace_ptr,
-                workspace_size,
-                actual_output->data(),  // loss
-                logits->data(),
-                target->data(),
-                nullptr),               // stream
-            return TEST_FAILED(OP_EXECUTION_FAILED, "Failed during cross_entropy_loss execution."));
+                 op_desc, workspace, workspace_size,
+                 actual_output->data(),
+                 logits->data(),
+                 target->data(),
+                 nullptr), // stream
+             return TEST_FAILED(OP_EXECUTION_FAILED, "Failed during cross entropy loss execution."));
 
-
-    // 验证结果
+    // 4. 验证结果
     try {
-        allClose(actual_output, expected_output, _rtol, _atol);
+        allClose(actual_output, loss, _rtol, _atol);
     } catch (const std::exception &e) {
+        if (workspace) {
+            infinirtFree(workspace);
+        }
         infiniopDestroyCrossEntropyLossDescriptor(op_desc);
         return TEST_FAILED(RESULT_INCORRECT, e.what());
     }
 
-    // 性能测试
+    // 5. 性能测试
     double elapsed_time = benchmark(
         [=]() {
             infiniopCrossEntropyLoss(
-                op_desc,
-                workspace_ptr,
-                workspace_size,
+                op_desc, workspace, workspace_size,
                 actual_output->data(),
                 logits->data(),
                 target->data(),
-                nullptr);
-        }, warm_ups, iterations);
+                nullptr); // stream
+        },
+        warm_ups, iterations);
 
+    // 6. 清理资源
+    if (workspace) {
+        infinirtFree(workspace);
+    }
     infiniopDestroyCrossEntropyLossDescriptor(op_desc);
 
     return TEST_PASSED(elapsed_time);
 }
 
+// 定义算子需要的属性名列表
 std::vector<std::string> Test::attribute_names() {
-    return {"reduction", "ignore_index", "label_smoothing"};
+    return {}; // CrossEntropyLoss 没有额外的属性
 }
 
+// 定义算子需要的张量名列表
 std::vector<std::string> Test::tensor_names() {
-    return {"logits", "target", "output", "weight"};
+    return {"logits", "target", "loss"};
 }
 
 std::vector<std::string> Test::output_names() {
     return {};
 }
 
+// 打印测试信息的辅助函数
 std::string Test::toString() const {
     std::ostringstream oss;
     oss << op_name() << std::endl;
     oss << "- logits: " << _attributes->logits->info() << std::endl;
     oss << "- target: " << _attributes->target->info() << std::endl;
-    oss << "- expected_output: " << _attributes->expected_output->info() << std::endl;
-    oss << "- has_weight: " << (_attributes->has_weight ? "true" : "false") << std::endl;
-    oss << "- reduction: " << _attributes->reduction << std::endl;
-    oss << "- ignore_index: " << _attributes->ignore_index << std::endl;
-    oss << "- label_smoothing: " << _attributes->label_smoothing << std::endl;
+    oss << "- loss: " << _attributes->loss->info() << std::endl;
     oss << std::scientific << std::setprecision(2);
     oss << "- rtol=" << _rtol << ", atol=" << _atol << std::endl;
     return oss.str();

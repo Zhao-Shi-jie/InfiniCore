@@ -75,12 +75,18 @@ _TOLERANCE_MAP = {
 def averagepool_backward(input_tensor, grad_output_tensor, kernel_size, stride, padding, ceil_mode, grad_input_tensor):
     input_tensor = input_tensor.detach().clone().requires_grad_(True)
     ndim = len(input_tensor.shape) - 2
+    # if ndim == 1:
+    #     output = F.avg_pool1d(input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode, count_include_pad=False)
+    # elif ndim == 2:
+    #     output = F.avg_pool2d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode, count_include_pad=False)
+    # elif ndim == 3:
+    #     output = F.avg_pool3d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode, count_include_pad=False)
     if ndim == 1:
-        output = F.avg_pool1d(input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode, count_include_pad=False)
+        output = F.avg_pool1d(input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode)
     elif ndim == 2:
-        output = F.avg_pool2d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode, count_include_pad=False)
+        output = F.avg_pool2d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode)
     elif ndim == 3:
-        output = F.avg_pool3d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode, count_include_pad=False)
+        output = F.avg_pool3d(input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode)
     else:
         raise ValueError("Unsupported dimension")
     output.backward(grad_output_tensor)

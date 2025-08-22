@@ -110,7 +110,7 @@ private:
     // 设置平均池化反向描述符
     CHECK_MCDNN(hcdnnSetPoolingNdDescriptor(
         pooling_backward_desc, 
-        HCDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING, // 平均池化模式
+        HCDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING, // 平均池化模式
         HCDNN_NOT_PROPAGATE_NAN,                     // 不传播NaN
         kernel_vec.size(),
         kernel_vec.data(),
