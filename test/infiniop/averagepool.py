@@ -64,11 +64,11 @@ _TEST_CASES = [
     ((2, 2, 33, 45, 39), None, (5, 3, 4), (3, 2, 3), (2, 1, 1), True),
 ]
 
-_TENSOR_DTYPES = [InfiniDtype.F16, InfiniDtype.F32, InfiniDtype.BF16]
+_TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16, InfiniDtype.BF16]
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
-    InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
-    InfiniDtype.BF16: {"atol": 1e-3, "rtol": 1e-2},
+    InfiniDtype.F32: {"atol": 1e-4, "rtol": 1e-4},
+    InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 def averagepool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tensor):

@@ -4,6 +4,7 @@
 #include "../../../utils.h"
 #include "../../operator.h"
 #include "../../tensor.h"
+#include <cstddef>
 #include <vector>
 
 namespace op::averagepool {
@@ -40,6 +41,20 @@ inline utils::Result<size_t> calculatePoolOutputSize(
     return utils::Result<size_t>(output_size);
 }
 
+// 检查是否存在隐式填充
+inline bool hasImplicitPadding(
+    size_t input_size,
+    size_t kernel_size,
+    size_t stride,
+    size_t padding,
+    bool ceil_mode) {
+    
+    if (!ceil_mode) {
+        return false;
+    }
+    return ((input_size + 2 * padding) - kernel_size) % stride != 0;
+}
+
 class AvgPoolInfo {
     AvgPoolInfo() = default;
 
@@ -53,6 +68,7 @@ public:
     size_t ndim;
     size_t batch;
     size_t channels;
+    bool has_implicit_padding = false;
 
     static utils::Result<AvgPoolInfo> create(
         infiniopTensorDescriptor_t output_desc,
@@ -85,6 +101,9 @@ public:
         auto stride_ptr = reinterpret_cast<const size_t *>(strides);
         auto pad_ptr = reinterpret_cast<const size_t *>(pads);
 
+        // 初始化隐式填充标志
+        info.has_implicit_padding = false;
+
         // 获取并校验空间维度
         for (size_t i = 0; i < info.ndim; ++i) {
             info.input_dims.push_back(input_desc->dim(i + 2));
@@ -102,6 +121,13 @@ public:
             }
 
             info.output_dims.push_back(output_desc->dim(i + 2));
+            
+            // 检查当前维度是否存在隐式填充
+            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i], 
+                                info.strides[i], info.pads[i], info.ceil_mode)) {
+                info.has_implicit_padding = true;
+            }
+
         }
         return utils::Result<AvgPoolInfo>(std::move(info));
     }
