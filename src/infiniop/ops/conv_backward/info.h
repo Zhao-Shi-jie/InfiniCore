@@ -52,7 +52,6 @@ public:
             info.grad_output_dims.push_back(grad_output_desc->dim(i));
         }
 
-        // 修复：正确的类型转换
         auto pad_ptr = reinterpret_cast<const int *>(pads);
         auto stride_ptr = reinterpret_cast<const int *>(strides);
         auto dilation_ptr = reinterpret_cast<const int *>(dilations);

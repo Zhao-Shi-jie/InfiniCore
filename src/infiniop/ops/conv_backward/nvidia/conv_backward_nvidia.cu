@@ -9,16 +9,10 @@ infiniStatus_t launch_bias_grad_kernel(const void *grad_output, void *grad_bias,
                                        size_t conv_ndim,
                                        cudnnDataType_t data_type,
                                        cudaStream_t stream) {
-  // 只处理 bf16 类型
-  if (data_type != CUDNN_DATA_BFLOAT16) {
-    return INFINI_STATUS_BAD_TENSOR_DTYPE;
-  }
-
   int batch_size = grad_output_dims[0];
   int channels = grad_output_dims[1];
   int spatial_size = 1;
 
-  // 计算空间维度大小
   for (size_t i = 2; i < conv_ndim + 2; ++i) {
     spatial_size *= grad_output_dims[i];
   }
@@ -408,8 +402,6 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 #ifdef ENABLE_CUDNN_API
   const float alpha = 1.0f, beta = 0.0f;
   auto internal = _opaque->internal;
-  if (workspace_size < _workspace_size)
-    return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
 
   return internal->useCudnn((cudaStream_t)stream, [&](cudnnHandle_t h) {
     if (!grad_input || !grad_weight || !grad_output || !input || !weight) {
@@ -437,9 +429,9 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
       int query_ndim = (_opaque->conv_ndim == 3) ? 5 : 4;
 
-      cudnnStatus_t status1 = cudnnGetTensorNdDescriptor(
+      CHECK_CUDNN(cudnnGetTensorNdDescriptor(
           _opaque->grad_output_desc, query_ndim, &grad_output_type,
-          &grad_output_nbDims, grad_output_dims, grad_output_strides);
+          &grad_output_nbDims, grad_output_dims, grad_output_strides));
       if (grad_output_type == CUDNN_DATA_BFLOAT16) {
         CHECK_STATUS(launch_bias_grad_kernel(
             grad_output, grad_bias, grad_output_dims, _opaque->conv_ndim,

@@ -181,9 +181,6 @@ infiniStatus_t Descriptor::create(infiniopHandle_t handle_,
   auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
   auto dtype = input_desc->dtype();
 
-  printf("Creating MaxPool Descriptor with dtype: %s\n",
-         infiniDtypeToString(dtype).c_str());
-
   CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
 
   auto result = MaxPoolInfo::create(output_desc, input_desc, kernel_size,

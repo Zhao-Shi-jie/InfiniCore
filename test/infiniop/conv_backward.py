@@ -22,7 +22,7 @@ import math
 _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16, InfiniDtype.BF16]
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
-    InfiniDtype.F32: {"atol": 5*1e-4, "rtol": 5*1e-4},
+    InfiniDtype.F32: {"atol": 3*1e-4, "rtol": 3*1e-4},
     InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 DEBUG = False
@@ -135,12 +135,6 @@ def test(
     grad_weight = TestTensor(weight_shape, weight_stride, dt=tensor_dtype, device=device)
     grad_bias = TestTensor((weight.shape[0],), (1,), dt=tensor_dtype, device=device) if bias is not None else None
 
-    # print("输出的梯度（input）:",grad_output_torch)
-    # print('data:', grad_output_tensor.actual_tensor())
-    
-    print(f"infiniop input shape: {input.shape}, device: {input.device}")
-    print(f"infiniop weight shape: {weight.shape}, device: {weight.device}")
-    print(f"infiniop grad_output shape: {grad_output_tensor.shape}, device: {grad_output_tensor.device}")
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
         LIBINFINIOP.infiniopCreateConvBackwardDescriptor(
@@ -157,7 +151,6 @@ def test(
         )
     )
 
-    print("ConvBack descriptor created")
     for tensor in [input, grad_output_tensor, weight, bias, grad_input, grad_weight, grad_bias]:
         if tensor is not None:
             tensor.destroy_desc()
