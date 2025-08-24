@@ -3,22 +3,22 @@
 #include "../../../devices/nvidia/nvidia_kernel_common.cuh"
 #include "averagepool_backward_nvidia.cuh"
 
-#define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func)                       \
-  do {                                                                         \
-    if (desc_ptr) {                                                            \
-      destroy_func(desc_ptr);                                                  \
-      desc_ptr = nullptr;                                                      \
-    }                                                                          \
-  } while (0)
+#define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func) \
+    do {                                                 \
+        if (desc_ptr) {                                  \
+            destroy_func(desc_ptr);                      \
+            desc_ptr = nullptr;                          \
+        }                                                \
+    } while (0)
 
-#define CLEANUP_CUDNN_DESCRIPTORS()                                            \
-  do {                                                                         \
-    DESTROY_CUDNN_DESCRIPTOR(input_desc, cudnnDestroyTensorDescriptor);        \
-    DESTROY_CUDNN_DESCRIPTOR(grad_input_desc, cudnnDestroyTensorDescriptor);   \
-    DESTROY_CUDNN_DESCRIPTOR(grad_output_desc, cudnnDestroyTensorDescriptor);  \
-    DESTROY_CUDNN_DESCRIPTOR(pooling_backward_desc,                            \
-                             cudnnDestroyPoolingDescriptor);                   \
-  } while (0)
+#define CLEANUP_CUDNN_DESCRIPTORS()                                               \
+    do {                                                                          \
+        DESTROY_CUDNN_DESCRIPTOR(input_desc, cudnnDestroyTensorDescriptor);       \
+        DESTROY_CUDNN_DESCRIPTOR(grad_input_desc, cudnnDestroyTensorDescriptor);  \
+        DESTROY_CUDNN_DESCRIPTOR(grad_output_desc, cudnnDestroyTensorDescriptor); \
+        DESTROY_CUDNN_DESCRIPTOR(pooling_backward_desc,                           \
+                                 cudnnDestroyPoolingDescriptor);                  \
+    } while (0)
 
 namespace op::averagepool_backward::nvidia {
 
@@ -39,7 +39,7 @@ private:
 
 #ifdef ENABLE_CUDNN_API
     infiniStatus_t getCudnnDataType(infiniDtype_t data_type,
-                                      cudnnDataType_t &cudnn_data_type) const {
+                                    cudnnDataType_t &cudnn_data_type) const {
         if (data_type == INFINI_DTYPE_F16) {
             cudnn_data_type = device::nvidia::getCudnnDtype(data_type);
         } else if (data_type == INFINI_DTYPE_F32) {
@@ -61,7 +61,7 @@ private:
     }
 
     infiniStatus_t createPoolingDescriptors(const AvgPoolBackwardInfo &info,
-                                          cudnnDataType_t cudnn_data_type) {
+                                            cudnnDataType_t cudnn_data_type) {
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&grad_input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&grad_output_desc));
@@ -126,7 +126,7 @@ private:
     }
 
     infiniStatus_t initializeCudnnContext(AvgPoolBackwardInfo &info,
-                                        infiniDtype_t data_type) {
+                                          infiniDtype_t data_type) {
         cudnnDataType_t cudnn_data_type;
         CHECK_STATUS(getCudnnDataType(data_type, cudnn_data_type));
 
@@ -144,10 +144,8 @@ public:
         : internal(std::move(other.internal)),
           workspace_size(other.workspace_size)
 #ifdef ENABLE_CUDNN_API
-        , input_desc(other.input_desc)
-        , grad_input_desc(other.grad_input_desc)
-        , grad_output_desc(other.grad_output_desc)
-        , pooling_backward_desc(other.pooling_backward_desc)
+          ,
+          input_desc(other.input_desc), grad_input_desc(other.grad_input_desc), grad_output_desc(other.grad_output_desc), pooling_backward_desc(other.pooling_backward_desc)
 #endif
     {
 #ifdef ENABLE_CUDNN_API
@@ -201,9 +199,8 @@ infiniStatus_t Descriptor::create(infiniopHandle_t handle_,
 
     CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
 
-    auto result =
-        AvgPoolBackwardInfo::create(grad_input_desc, grad_output_desc, input_desc,
-                                    kernel_size, strides, pads, ceil_mode);
+    auto result = AvgPoolBackwardInfo::create(grad_input_desc, grad_output_desc, input_desc,
+                                              kernel_size, strides, pads, ceil_mode);
     CHECK_RESULT(result);
     auto info = result.take();
 
@@ -243,12 +240,12 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
             CHECK_CUDNN(cudnnPoolingForward(
                 handle, _opaque->pooling_backward_desc, &alpha, _opaque->input_desc,
                 input, &beta, _opaque->grad_output_desc, temp_output));
-            
+
             CHECK_CUDNN(cudnnPoolingBackward(
                 handle, _opaque->pooling_backward_desc, &alpha,
-                _opaque->grad_output_desc, temp_output, 
-                _opaque->grad_output_desc, grad_output, 
-                _opaque->input_desc, input, 
+                _opaque->grad_output_desc, temp_output,
+                _opaque->grad_output_desc, grad_output,
+                _opaque->input_desc, input,
                 &beta,
                 _opaque->grad_input_desc, grad_input));
             return INFINI_STATUS_SUCCESS;

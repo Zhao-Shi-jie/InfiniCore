@@ -69,10 +69,18 @@ class TestTensor(CTensor):
         torch_dtype = to_torch_dtype(dt)
         if mode == "random":
             if dt == InfiniDtype.I8:
-                self._torch_tensor = torch.randint(-128, 128, torch_shape, dtype=to_torch_dtype(dt), device=torch_device_map[device])
+                self._torch_tensor = torch.randint(
+                    -128,
+                    128,
+                    torch_shape,
+                    dtype=to_torch_dtype(dt),
+                    device=torch_device_map[device],
+                )
             else:
                 self._torch_tensor = torch.rand(
-                    torch_shape, dtype=to_torch_dtype(dt), device=torch_device_map[device]
+                    torch_shape,
+                    dtype=to_torch_dtype(dt),
+                    device=torch_device_map[device],
                 )
         elif mode == "zeros":
             self._torch_tensor = torch.zeros(
@@ -98,15 +106,29 @@ class TestTensor(CTensor):
         #     self._torch_tensor += bias
         # 为整数类型特殊处理 scale 和 bias
         if scale is not None:
-            if torch_dtype in [torch.int8, torch.uint8, torch.int16, torch.int32, torch.int64]:
+            if torch_dtype in [
+                torch.int8,
+                torch.uint8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+            ]:
                 # 对于整数类型，先转换为 float，应用 scale，再转换回原类型
-                self._torch_tensor = (self._torch_tensor.float() * scale).to(torch_dtype)
+                self._torch_tensor = (self._torch_tensor.float() * scale).to(
+                    torch_dtype
+                )
             else:
                 # 对于浮点类型，直接应用 scale
                 self._torch_tensor *= scale
-                
+
         if bias is not None:
-            if torch_dtype in [torch.int8, torch.uint8, torch.int16, torch.int32, torch.int64]:
+            if torch_dtype in [
+                torch.int8,
+                torch.uint8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+            ]:
                 # 对于整数类型，先转换为 float，应用 bias，再转换回原类型
                 self._torch_tensor = (self._torch_tensor.float() + bias).to(torch_dtype)
             else:

@@ -26,7 +26,7 @@ std::shared_ptr<Test> Test::build(
     test->_attributes = new Attributes();
 
     // 检查必需的张量是否存在
-    if (!check_names(tensors, Test::tensor_names()) || !check_names(attributes, Test::attribute_names()) ) {
+    if (!check_names(tensors, Test::tensor_names()) || !check_names(attributes, Test::attribute_names())) {
         throw std::runtime_error("Invalid Test: Missing required tensors.");
     }
 
@@ -37,7 +37,7 @@ std::shared_ptr<Test> Test::build(
     // 新增：打印 target 前几个元素
     std::cout << "DEBUG: target 张量前5个元素: ";
     auto targetTensor = test->_attributes->target;
-    const int64_t* data = static_cast<const int64_t*>(targetTensor->data()); // 按实际类型调整
+    const int64_t *data = static_cast<const int64_t *>(targetTensor->data()); // 按实际类型调整
     for (size_t i = 0; i < 3; ++i) {
         std::cout << data[i] << " ";
     }

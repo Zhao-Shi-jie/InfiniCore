@@ -28,8 +28,7 @@ std::shared_ptr<Test> Test::build(
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
 
-    if (!check_names(attributes, Test::attribute_names()) ||
-        !check_names(tensors, Test::tensor_names())) {
+    if (!check_names(attributes, Test::attribute_names()) || !check_names(tensors, Test::tensor_names())) {
         throw std::runtime_error("Invalid Test");
     }
 
@@ -49,8 +48,7 @@ std::shared_ptr<Test> Test::build(
         throw std::runtime_error("Invalid kernel_size data size");
     }
     size_t kernel_size_count = kernel_size_data.size() / sizeof(int);
-    const int* kernel_size_ptr =
-        reinterpret_cast<const int*>(kernel_size_data.data());
+    const int *kernel_size_ptr = reinterpret_cast<const int *>(kernel_size_data.data());
 
     if (kernel_size_count == pool_ndim) {
         test->_attributes->kernel_size.clear();
@@ -69,8 +67,7 @@ std::shared_ptr<Test> Test::build(
         throw std::runtime_error("Invalid stride data size");
     }
     size_t stride_count = stride_data.size() / sizeof(int);
-    const int* stride_ptr =
-        reinterpret_cast<const int*>(stride_data.data());
+    const int *stride_ptr = reinterpret_cast<const int *>(stride_data.data());
 
     if (stride_count == pool_ndim) {
         test->_attributes->stride.clear();
@@ -89,8 +86,7 @@ std::shared_ptr<Test> Test::build(
         throw std::runtime_error("Invalid padding data size");
     }
     size_t padding_count = padding_data.size() / sizeof(int);
-    const int* padding_ptr =
-        reinterpret_cast<const int*>(padding_data.data());
+    const int *padding_ptr = reinterpret_cast<const int *>(padding_data.data());
 
     if (padding_count == pool_ndim) {
         test->_attributes->padding.clear();
@@ -106,11 +102,9 @@ std::shared_ptr<Test> Test::build(
     // ---- 解析 ceil_mode ----
     auto ceil_mode_data = attributes["ceil_mode"];
     if (ceil_mode_data.size() == sizeof(bool)) {
-        test->_attributes->ceil_mode =
-            *reinterpret_cast<const bool*>(ceil_mode_data.data());
+        test->_attributes->ceil_mode = *reinterpret_cast<const bool *>(ceil_mode_data.data());
     } else if (ceil_mode_data.size() == sizeof(uint8_t)) {
-        test->_attributes->ceil_mode =
-            *reinterpret_cast<const uint8_t*>(ceil_mode_data.data()) != 0;
+        test->_attributes->ceil_mode = *reinterpret_cast<const uint8_t *>(ceil_mode_data.data()) != 0;
     } else {
         throw std::runtime_error("Invalid ceil_mode data size");
     }
@@ -120,17 +114,23 @@ std::shared_ptr<Test> Test::build(
     std::cout << "DEBUG: After broadcasting:\n";
     std::cout << "  kernel_size: [";
     for (size_t i = 0; i < test->_attributes->kernel_size.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << test->_attributes->kernel_size[i];
     }
     std::cout << "]\n  stride: [";
     for (size_t i = 0; i < test->_attributes->stride.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << test->_attributes->stride[i];
     }
     std::cout << "]\n  padding: [";
     for (size_t i = 0; i < test->_attributes->padding.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << test->_attributes->padding[i];
     }
     std::cout << "]\n  ceil_mode: "
@@ -153,17 +153,20 @@ std::shared_ptr<infiniop_test::Result> Test::run(
 
     std::cout << "DEBUG: output shape: [";
     for (size_t i = 0; i < output_shape.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << output_shape[i];
     }
     std::cout << "]" << std::endl;
 
     size_t output_size_bytes = 1;
-    for (auto d : output_shape) output_size_bytes *= d;
+    for (auto d : output_shape) {
+        output_size_bytes *= d;
+    }
     output_size_bytes *= ggmlTypeSize(input_dtype);
 
-    auto output_memory =
-        std::make_shared<Memory>(output_size_bytes, device, device_id);
+    auto output_memory = std::make_shared<Memory>(output_size_bytes, device, device_id);
 
     std::vector<ptrdiff_t> output_strides(output_shape.size());
     if (!output_shape.empty()) {
@@ -179,25 +182,31 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     std::cout << "DEBUG: actual_output created successfully" << std::endl;
 
     // 参数指针（按底层接口需要传 void*）
-    void* kernel_size_ptr = _attributes->kernel_size.data();
-    void* stride_ptr      = _attributes->stride.data();
-    void* padding_ptr     = _attributes->padding.data();
+    void *kernel_size_ptr = _attributes->kernel_size.data();
+    void *stride_ptr = _attributes->stride.data();
+    void *padding_ptr = _attributes->padding.data();
 
     // 调试打印
     std::cout << "DEBUG: AvgPool parameters:\n";
     std::cout << "  kernel_size: [";
     for (size_t i = 0; i < _attributes->kernel_size.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << _attributes->kernel_size[i];
     }
     std::cout << "]\n  stride: [";
     for (size_t i = 0; i < _attributes->stride.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << _attributes->stride[i];
     }
     std::cout << "]\n  padding: [";
     for (size_t i = 0; i < _attributes->padding.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << _attributes->padding[i];
     }
     std::cout << "]\n  ceil_mode: "
@@ -206,7 +215,9 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     std::cout << "DEBUG: input shape: [";
     auto input_shape = input->shape();
     for (size_t i = 0; i < input_shape.size(); ++i) {
-        if (i) std::cout << ", ";
+        if (i) {
+            std::cout << ", ";
+        }
         std::cout << input_shape[i];
     }
     std::cout << "], dtype: " << input->ggml_type() << std::endl;
@@ -231,7 +242,7 @@ std::shared_ptr<infiniop_test::Result> Test::run(
                                 "Failed to get workspace size."));
 
     // ---- 分配工作空间（如需要）----
-    void* workspace = nullptr;
+    void *workspace = nullptr;
     if (workspace_size > 0) {
         CHECK_OR(infinirtMalloc(&workspace, workspace_size),
                  return TEST_FAILED(OP_CREATION_FAILED,
@@ -250,8 +261,10 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     // ---- 精度校验 ----
     try {
         allClose(actual_output, expected_output, _rtol, _atol);
-    } catch (const std::exception& e) {
-        if (workspace) infinirtFree(workspace);
+    } catch (const std::exception &e) {
+        if (workspace) {
+            infinirtFree(workspace);
+        }
         infiniopDestroyAvgPoolDescriptor(op_desc);
         return TEST_FAILED(RESULT_INCORRECT, e.what());
     }
@@ -268,7 +281,9 @@ std::shared_ptr<infiniop_test::Result> Test::run(
         warm_ups, iterations);
 
     // ---- 清理资源 ----
-    if (workspace) infinirtFree(workspace);
+    if (workspace) {
+        infinirtFree(workspace);
+    }
     infiniopDestroyAvgPoolDescriptor(op_desc);
 
     return TEST_PASSED(elapsed_time);
@@ -294,17 +309,23 @@ std::string Test::toString() const {
 
     oss << "- kernel_size: [";
     for (size_t i = 0; i < _attributes->kernel_size.size(); ++i) {
-        if (i) oss << ", ";
+        if (i) {
+            oss << ", ";
+        }
         oss << _attributes->kernel_size[i];
     }
     oss << "]\n- stride: [";
     for (size_t i = 0; i < _attributes->stride.size(); ++i) {
-        if (i) oss << ", ";
+        if (i) {
+            oss << ", ";
+        }
         oss << _attributes->stride[i];
     }
     oss << "]\n- padding: [";
     for (size_t i = 0; i < _attributes->padding.size(); ++i) {
-        if (i) oss << ", ";
+        if (i) {
+            oss << ", ";
+        }
         oss << _attributes->padding[i];
     }
     oss << "]\n- ceil_mode: "

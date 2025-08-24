@@ -36,18 +36,52 @@ _TEST_CASES = [
     ((2, 4, 16), (64, 16, 1), (8, 4, 5), (20, 5, 1), (0,), (1,), (1,), 1),
     ((2, 4, 32), (128, 32, 1), (8, 4, 3), (12, 3, 1), (1,), (2,), (1,), 1),
     ((1, 2, 64), (128, 64, 1), (4, 2, 7), (14, 7, 1), (2,), (3,), (1,), 1),
-
     # 2D Conv Backward Tests
-    ((2, 3, 16, 16), (768, 256, 16, 1), (6, 3, 3, 3), (27, 9, 3, 1), (0, 1), (1, 2), (2, 2), 1),
-    ((1, 4, 32, 32), (4096, 1024, 32, 1), (8, 4, 5, 5), (100, 25, 5, 1), (2, 0), (2, 1), (1, 1), 1),
-    ((1, 2, 64, 32), (4096, 2048, 32, 1), (4, 2, 7, 3), (42, 21, 3, 1), (1, 2), (3, 2), (1, 1), 1),
-
+    (
+        (2, 3, 16, 16),
+        (768, 256, 16, 1),
+        (6, 3, 3, 3),
+        (27, 9, 3, 1),
+        (0, 1),
+        (1, 2),
+        (2, 2),
+        1,
+    ),
+    (
+        (1, 4, 32, 32),
+        (4096, 1024, 32, 1),
+        (8, 4, 5, 5),
+        (100, 25, 5, 1),
+        (2, 0),
+        (2, 1),
+        (1, 1),
+        1,
+    ),
+    (
+        (1, 2, 64, 32),
+        (4096, 2048, 32, 1),
+        (4, 2, 7, 3),
+        (42, 21, 3, 1),
+        (1, 2),
+        (3, 2),
+        (1, 1),
+        1,
+    ),
     # 3D Conv Backward Tests
-    ((1, 2, 8, 8, 8), (1024, 512, 64, 8, 1), (4, 2, 3, 3, 3), (54, 27, 9, 3, 1), (0, 1, 2), (1, 2, 1), (1, 1, 1), 1),
-
+    (
+        (1, 2, 8, 8, 8),
+        (1024, 512, 64, 8, 1),
+        (4, 2, 3, 3, 3),
+        (54, 27, 9, 3, 1),
+        (0, 1, 2),
+        (1, 2, 1),
+        (1, 1, 1),
+        1,
+    ),
     # Grouped convolution test case
     ((2, 4, 16), (64, 16, 1), (4, 2, 3), (6, 3, 1), (1,), (1,), (1,), 2),
 ]
+
 
 def inferShapeStride(
     x_shape: List[int],
@@ -78,10 +112,12 @@ def inferShapeStride(
     output_strides = tuple(output_strides)
     return output_shape, output_strides
 
+
 def tuple_to_void_p(py_tuple: Tuple):
     array = ctypes.c_int * len(py_tuple)
     data_array = array(*py_tuple)
     return ctypes.cast(data_array, ctypes.c_void_p)
+
 
 def test(
     handle,
@@ -98,40 +134,86 @@ def test(
     sync=None,
 ):
     assert len(pads) == len(strides) == len(dilations)
-    input = TestTensor(input_shape, input_stride, dt=tensor_dtype, device=device, scale=0.01)
-    weight = TestTensor(weight_shape, weight_stride, dt=tensor_dtype, device=device, scale=0.01)
-    output_shape, output_stride = inferShapeStride(input_shape, weight_shape, pads, strides, dilations)
-    #grad_output = TestTensor(output_shape, output_stride, dt=tensor_dtype, device=device)
-    bias = (
-        TestTensor((weight.shape[0],), (1,), dt=tensor_dtype, device=device, scale=0.01)
+    input = TestTensor(
+        input_shape, input_stride, dt=tensor_dtype, device=device, scale=0.01
+    )
+    weight = TestTensor(
+        weight_shape, weight_stride, dt=tensor_dtype, device=device, scale=0.01
+    )
+    output_shape, output_stride = inferShapeStride(
+        input_shape, weight_shape, pads, strides, dilations
+    )
+    # grad_output = TestTensor(output_shape, output_stride, dt=tensor_dtype, device=device)
+    bias = TestTensor(
+        (weight.shape[0],), (1,), dt=tensor_dtype, device=device, scale=0.01
     )
     # bias = None  # Disable bias for now
     # 1. PyTorch reference backward
     input_torch = input.torch_tensor().detach().clone().requires_grad_(True)
     weight_torch = weight.torch_tensor().detach().clone().requires_grad_(True)
-    bias_torch = bias.torch_tensor().detach().clone().requires_grad_(True) if bias is not None else None
-    grad_output_torch = torch.randn(output_shape, dtype=input_torch.dtype, device=input_torch.device)
+    bias_torch = (
+        bias.torch_tensor().detach().clone().requires_grad_(True)
+        if bias is not None
+        else None
+    )
+    grad_output_torch = torch.randn(
+        output_shape, dtype=input_torch.dtype, device=input_torch.device
+    )
     # Forward
     if len(input_shape) == 3:
-        y_ref = torch.nn.functional.conv1d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
+        y_ref = torch.nn.functional.conv1d(
+            input_torch,
+            weight_torch,
+            bias=bias_torch,
+            stride=strides,
+            padding=pads,
+            dilation=dilations,
+            groups=groups,
+        )
     elif len(input_shape) == 4:
-        y_ref = torch.nn.functional.conv2d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
+        y_ref = torch.nn.functional.conv2d(
+            input_torch,
+            weight_torch,
+            bias=bias_torch,
+            stride=strides,
+            padding=pads,
+            dilation=dilations,
+            groups=groups,
+        )
     elif len(input_shape) == 5:
-        y_ref = torch.nn.functional.conv3d(input_torch, weight_torch, bias=bias_torch, stride=strides, padding=pads, dilation=dilations, groups=groups)
+        y_ref = torch.nn.functional.conv3d(
+            input_torch,
+            weight_torch,
+            bias=bias_torch,
+            stride=strides,
+            padding=pads,
+            dilation=dilations,
+            groups=groups,
+        )
     else:
         raise NotImplementedError("Unsupported ndim")
-    print(f"PyTorch output shape: {y_ref.shape}, dtype: {y_ref.dtype}, device: {y_ref.device}")
+    print(
+        f"PyTorch output shape: {y_ref.shape}, dtype: {y_ref.dtype}, device: {y_ref.device}"
+    )
     y_ref.backward(grad_output_torch)
     grad_input_ref = input_torch.grad
     grad_weight_ref = weight_torch.grad
     grad_bias_ref = bias_torch.grad if bias is not None else None
 
     # 2. infiniop backward
-    grad_output_tensor = TestTensor(output_shape, output_stride, dt=tensor_dtype, device=device)
+    grad_output_tensor = TestTensor(
+        output_shape, output_stride, dt=tensor_dtype, device=device
+    )
     grad_output_tensor.actual_tensor().copy_(grad_output_torch)
     grad_input = TestTensor(input_shape, input_stride, dt=tensor_dtype, device=device)
-    grad_weight = TestTensor(weight_shape, weight_stride, dt=tensor_dtype, device=device)
-    grad_bias = TestTensor((weight.shape[0],), (1,), dt=tensor_dtype, device=device) if bias is not None else None
+    grad_weight = TestTensor(
+        weight_shape, weight_stride, dt=tensor_dtype, device=device
+    )
+    grad_bias = (
+        TestTensor((weight.shape[0],), (1,), dt=tensor_dtype, device=device)
+        if bias is not None
+        else None
+    )
 
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
@@ -149,7 +231,15 @@ def test(
         )
     )
 
-    for tensor in [input, grad_output_tensor, weight, bias, grad_input, grad_weight, grad_bias]:
+    for tensor in [
+        input,
+        grad_output_tensor,
+        weight,
+        bias,
+        grad_input,
+        grad_weight,
+        grad_bias,
+    ]:
         if tensor is not None:
             tensor.destroy_desc()
 
@@ -182,21 +272,36 @@ def test(
     # Compare grad_input
     if DEBUG:
         debug(grad_input.actual_tensor(), grad_input_ref, atol=atol, rtol=rtol)
-    assert torch.allclose(grad_input.actual_tensor(), grad_input_ref, atol=atol, rtol=rtol)
+    assert torch.allclose(
+        grad_input.actual_tensor(), grad_input_ref, atol=atol, rtol=rtol
+    )
     # Compare grad_weight
     if DEBUG:
         debug(grad_weight.actual_tensor(), grad_weight_ref, atol=atol, rtol=rtol)
-    assert torch.allclose(grad_weight.actual_tensor(), grad_weight_ref, atol=atol, rtol=rtol)
+    assert torch.allclose(
+        grad_weight.actual_tensor(), grad_weight_ref, atol=atol, rtol=rtol
+    )
     # Compare grad_bias
     if grad_bias is not None:
         if DEBUG:
             debug(grad_bias.actual_tensor(), grad_bias_ref, atol=atol, rtol=rtol)
-        assert torch.allclose(grad_bias.actual_tensor(), grad_bias_ref, atol=atol, rtol=rtol)
+        assert torch.allclose(
+            grad_bias.actual_tensor(), grad_bias_ref, atol=atol, rtol=rtol
+        )
 
     if PROFILE:
-        profile_operation("PyTorch", lambda: y_ref.backward(grad_output_torch), device, NUM_PRERUN, NUM_ITERATIONS)
-        profile_operation("    lib", lambda: lib_conv_backward(), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation(
+            "PyTorch",
+            lambda: y_ref.backward(grad_output_torch),
+            device,
+            NUM_PRERUN,
+            NUM_ITERATIONS,
+        )
+        profile_operation(
+            "    lib", lambda: lib_conv_backward(), device, NUM_PRERUN, NUM_ITERATIONS
+        )
     check_error(LIBINFINIOP.infiniopDestroyConvBackwardDescriptor(descriptor))
+
 
 if __name__ == "__main__":
     args = get_args()
@@ -205,7 +310,7 @@ if __name__ == "__main__":
     NUM_PRERUN = args.num_prerun
     NUM_ITERATIONS = args.num_iterations
     for device in get_test_devices(args):
-        if InfiniDeviceNames[device] == 'Iluvatar':
+        if InfiniDeviceNames[device] == "Iluvatar":
             _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16]
         test_operator(device, test, _TEST_CASES, _TENSOR_DTYPES)
     print("\033[92mConvBackward test passed!\033[0m")

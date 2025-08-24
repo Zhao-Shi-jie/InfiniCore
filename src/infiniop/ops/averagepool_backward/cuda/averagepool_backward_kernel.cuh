@@ -26,9 +26,8 @@ __global__ void avgpool1d_pytorch_backward_kernel(
     int pool_size = 0;
     for (int k = 0; k < kernel_size; ++k) {
         int input_pos = window_start + k;
-        if ((input_pos >= 0 && input_pos < input_length) || 
-            (input_pos >= -padding && input_pos < input_length + padding)) {
-             pool_size++;
+        if ((input_pos >= 0 && input_pos < input_length) || (input_pos >= -padding && input_pos < input_length + padding)) {
+            pool_size++;
         }
     }
 
@@ -46,7 +45,6 @@ __global__ void avgpool1d_pytorch_backward_kernel(
         }
     }
 }
-
 
 template <typename T>
 __global__ void avgpool2d_pytorch_backward_kernel(
@@ -79,8 +77,7 @@ __global__ void avgpool2d_pytorch_backward_kernel(
         for (int kw = 0; kw < kernel_w; ++kw) {
             int input_h = window_start_h + kh;
             int input_w = window_start_w + kw;
-            if ((input_h >= 0 && input_h < input_height && input_w >= 0 && input_w < input_width) ||
-                (input_h >= -pad_h && input_h < input_height + pad_h && input_w >= -pad_w && input_w < input_width + pad_w)) {
+            if ((input_h >= 0 && input_h < input_height && input_w >= 0 && input_w < input_width) || (input_h >= -pad_h && input_h < input_height + pad_h && input_w >= -pad_w && input_w < input_width + pad_w)) {
                 pool_size++;
             }
         }
@@ -89,7 +86,7 @@ __global__ void avgpool2d_pytorch_backward_kernel(
     if (pool_size == 0) {
         return;
     }
-    
+
     float grad_per_input = grad / static_cast<float>(pool_size);
 
     for (int kh = 0; kh < kernel_h; ++kh) {
@@ -104,7 +101,6 @@ __global__ void avgpool2d_pytorch_backward_kernel(
         }
     }
 }
-
 
 template <typename T>
 __global__ void avgpool3d_pytorch_backward_kernel(
@@ -147,8 +143,7 @@ __global__ void avgpool3d_pytorch_backward_kernel(
                 int input_h = window_start_h + kh;
                 int input_w = window_start_w + kw;
 
-                if ((input_d >= 0 && input_d < input_depth && input_h >= 0 && input_h < input_height && input_w >= 0 && input_w < input_width) ||
-                    (input_d >= -pad_d && input_d < input_depth + pad_d && input_h >= -pad_h && input_h < input_height + pad_h && input_w >= -pad_w && input_w < input_width + pad_w)) {
+                if ((input_d >= 0 && input_d < input_depth && input_h >= 0 && input_h < input_height && input_w >= 0 && input_w < input_width) || (input_d >= -pad_d && input_d < input_depth + pad_d && input_h >= -pad_h && input_h < input_height + pad_h && input_w >= -pad_w && input_w < input_width + pad_w)) {
                     pool_size++;
                 }
             }

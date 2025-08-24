@@ -21,9 +21,9 @@ __C infiniStatus_t infiniopCreateAvgPoolDescriptor(
 
 #define CREATE(CASE, NAMESPACE)                                                    \
     case CASE:                                                                     \
-        return op::averagepool::NAMESPACE::Descriptor::create(                        \
+        return op::averagepool::NAMESPACE::Descriptor::create(                     \
             handle,                                                                \
-            reinterpret_cast<op::averagepool::NAMESPACE::Descriptor **>(desc_ptr),     \
+            reinterpret_cast<op::averagepool::NAMESPACE::Descriptor **>(desc_ptr), \
             output_desc,                                                           \
             input_desc,                                                            \
             kernel_size,                                                           \
@@ -54,8 +54,8 @@ __C infiniStatus_t infiniopGetAvgPoolWorkspaceSize(
     infiniopAvgPoolDescriptor_t desc,
     size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                                   \
-    case CASE:                                                                                 \
+#define GET(CASE, NAMESPACE)                                                                             \
+    case CASE:                                                                                           \
         *size = reinterpret_cast<const op::averagepool::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
@@ -86,12 +86,12 @@ __C infiniStatus_t infiniopAvgPool(
     const void *input,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                                 \
-    case CASE:                                                                     \
+#define CALCULATE(CASE, NAMESPACE)                                                    \
+    case CASE:                                                                        \
         return reinterpret_cast<const op::averagepool::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size,                                 \
-                        output,                                                    \
-                        input,                                                     \
+            ->calculate(workspace, workspace_size,                                    \
+                        output,                                                       \
+                        input,                                                        \
                         stream)
 
     switch (desc->device_type) {
@@ -115,8 +115,8 @@ __C infiniStatus_t infiniopAvgPool(
 
 __C infiniStatus_t infiniopDestroyAvgPoolDescriptor(infiniopAvgPoolDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                     \
-    case CASE:                                                                      \
+#define DELETE(CASE, NAMESPACE)                                                        \
+    case CASE:                                                                         \
         delete reinterpret_cast<const op::averagepool::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS;
 

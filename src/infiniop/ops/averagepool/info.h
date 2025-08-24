@@ -48,7 +48,7 @@ inline bool hasImplicitPadding(
     size_t stride,
     size_t padding,
     bool ceil_mode) {
-    
+
     if (!ceil_mode) {
         return false;
     }
@@ -110,24 +110,23 @@ public:
             info.kernel_sizes.push_back(kernel_ptr[i]);
             info.strides.push_back(stride_ptr[i]);
             info.pads.push_back(pad_ptr[i]);
-            
+
             auto output_size_result = calculatePoolOutputSize(
                 info.input_dims[i], info.kernel_sizes[i], info.strides[i], info.pads[i], info.ceil_mode);
             CHECK_RESULT(output_size_result);
-            
+
             size_t expected_size = output_size_result.take();
             if (expected_size != output_desc->dim(i + 2)) {
                 return INFINI_STATUS_BAD_TENSOR_SHAPE;
             }
 
             info.output_dims.push_back(output_desc->dim(i + 2));
-            
+
             // 检查当前维度是否存在隐式填充
-            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i], 
-                                info.strides[i], info.pads[i], info.ceil_mode)) {
+            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i],
+                                   info.strides[i], info.pads[i], info.ceil_mode)) {
                 info.has_implicit_padding = true;
             }
-
         }
         return utils::Result<AvgPoolInfo>(std::move(info));
     }

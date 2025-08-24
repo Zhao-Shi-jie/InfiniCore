@@ -34,17 +34,14 @@ _TEST_CASES = [
     # 1D max pooling cases
     ((1, 3, 8), None, (2,), (2,), (0,), False),
     ((2, 4, 16), None, (3,), (2,), (1,), False),
-    
     # 2D max pooling cases
     ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),
     ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),
     ((1, 64, 32, 32), None, (2, 2), (2, 2), (0, 0), False),
     ((4, 128, 16, 16), None, (3, 3), (1, 1), (1, 1), False),
-    
     # 3D max pooling cases
     ((1, 1, 4, 4, 4), None, (2, 2, 2), (2, 2, 2), (0, 0, 0), False),
     ((2, 2, 8, 8, 8), None, (2, 3, 3), (2, 2, 2), (0, 1, 1), False),
-    
     # Cases with ceil_mode=True
     ((1, 1, 7, 7), None, (3, 3), (2, 2), (1, 1), True),
     ((1, 2, 5), None, (3,), (2,), (0,), True),
@@ -66,34 +63,34 @@ def max_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tenso
     Perform max pooling using PyTorch as reference
     """
     ndim = len(input_tensor.shape) - 2  # Spatial dimensions
-    
+
     if ndim == 1:
         result = F.max_pool1d(
-            input_tensor, 
-            kernel_size=kernel_size[0], 
-            stride=stride[0], 
+            input_tensor,
+            kernel_size=kernel_size[0],
+            stride=stride[0],
             padding=padding[0],
-            ceil_mode=ceil_mode
+            ceil_mode=ceil_mode,
         )
     elif ndim == 2:
         result = F.max_pool2d(
-            input_tensor, 
-            kernel_size=kernel_size, 
-            stride=stride, 
+            input_tensor,
+            kernel_size=kernel_size,
+            stride=stride,
             padding=padding,
-            ceil_mode=ceil_mode
+            ceil_mode=ceil_mode,
         )
     elif ndim == 3:
         result = F.max_pool3d(
-            input_tensor, 
-            kernel_size=kernel_size, 
-            stride=stride, 
+            input_tensor,
+            kernel_size=kernel_size,
+            stride=stride,
             padding=padding,
-            ceil_mode=ceil_mode
+            ceil_mode=ceil_mode,
         )
     else:
         raise ValueError(f"Unsupported spatial dimensions: {ndim}")
-    
+
     output_tensor.copy_(result)
 
 
@@ -101,23 +98,24 @@ def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
     """
     Infer the output shape for max pooling operation
     """
+
     def calc_output_size(input_size, kernel_size, stride, padding, ceil_mode):
         if ceil_mode:
             return math.ceil((input_size + 2 * padding - kernel_size) / stride + 1)
         else:
             return math.floor((input_size + 2 * padding - kernel_size) / stride + 1)
-    
+
     batch_size = input_shape[0]
     channels = input_shape[1]
     spatial_dims = input_shape[2:]
-    
+
     output_spatial = []
     for i, dim_size in enumerate(spatial_dims):
         output_size = calc_output_size(
             dim_size, kernel_size[i], stride[i], padding[i], ceil_mode
         )
         output_spatial.append(output_size)
-    
+
     return (batch_size, channels) + tuple(output_spatial)
 
 
@@ -144,12 +142,12 @@ def test(
     input_tensor = TestTensor(
         input_shape, input_stride, dt=tensor_dtype, device=device, scale=1.0
     )
-    
+
     # Infer output shape
-    output_shape = infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode)
-    output_tensor = TestTensor(
-        output_shape, None, dt=tensor_dtype, device=device
+    output_shape = infer_output_shape(
+        input_shape, kernel_size, stride, padding, ceil_mode
     )
+    output_tensor = TestTensor(output_shape, None, dt=tensor_dtype, device=device)
 
     print(
         f"Testing MaxPool on {InfiniDeviceNames[device]} with "
@@ -165,7 +163,7 @@ def test(
         stride,
         padding,
         ceil_mode,
-        output_tensor.torch_tensor()
+        output_tensor.torch_tensor(),
     )
 
     if sync is not None:
@@ -211,44 +209,45 @@ def test(
                 None,
             )
         )
-    
+
     # Execute the operation
     lib_max_pool()
-    
+
     # Check results
     atol, rtol = get_tolerance(_TOLERANCE_MAP, tensor_dtype)
     if DEBUG:
-        debug(output_tensor.actual_tensor(), output_tensor.torch_tensor(), atol=atol, rtol=rtol)
-    
+        debug(
+            output_tensor.actual_tensor(),
+            output_tensor.torch_tensor(),
+            atol=atol,
+            rtol=rtol,
+        )
+
     assert torch.allclose(
-        output_tensor.actual_tensor(), 
-        output_tensor.torch_tensor(), 
-        atol=atol, 
-        rtol=rtol
+        output_tensor.actual_tensor(),
+        output_tensor.torch_tensor(),
+        atol=atol,
+        rtol=rtol,
     ), f"Results don't match for input_shape {input_shape}, kernel_size {kernel_size}"
 
     # Profiling workflow
     if PROFILE:
         profile_operation(
-            "PyTorch", 
+            "PyTorch",
             lambda: max_pool(
-                input_tensor.torch_tensor(), 
-                kernel_size, 
-                stride, 
-                padding, 
+                input_tensor.torch_tensor(),
+                kernel_size,
+                stride,
+                padding,
                 ceil_mode,
-                output_tensor.torch_tensor()
-            ), 
-            device, 
-            NUM_PRERUN, 
-            NUM_ITERATIONS
+                output_tensor.torch_tensor(),
+            ),
+            device,
+            NUM_PRERUN,
+            NUM_ITERATIONS,
         )
         profile_operation(
-            "    lib", 
-            lambda: lib_max_pool(), 
-            device, 
-            NUM_PRERUN, 
-            NUM_ITERATIONS
+            "    lib", lambda: lib_max_pool(), device, NUM_PRERUN, NUM_ITERATIONS
         )
 
     # Clean up
@@ -263,9 +262,9 @@ if __name__ == "__main__":
     PROFILE = args.profile
     NUM_PRERUN = args.num_prerun
     NUM_ITERATIONS = args.num_iterations
-    
+
     for device in get_test_devices(args):
-        if InfiniDeviceNames[device] == 'Iluvatar':
+        if InfiniDeviceNames[device] == "Iluvatar":
             _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16]
         test_operator(device, test, _TEST_CASES, _TENSOR_DTYPES)
 

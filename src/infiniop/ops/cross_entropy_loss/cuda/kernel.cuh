@@ -1,9 +1,9 @@
 #ifndef __CROSS_ENTROPY_KERNEL_CUH__
 #define __CROSS_ENTROPY_KERNEL_CUH__
 
+#include <cstdint>
 #include <hpcc_fp16.h>
 #include <math.h>
-#include <cstdint> 
 
 __device__ __forceinline__ float to_float(float val) {
     return val;
@@ -19,17 +19,19 @@ __device__ __forceinline__ float to_float(__hpcc_bfloat16 val) {
 
 template <typename T_in, typename T_out>
 __global__ void cross_entropy_loss_kernel(
-    T_out* loss,          
-    const T_in* logits,
-    const int64_t* target, 
+    T_out *loss,
+    const T_in *logits,
+    const int64_t *target,
     int N,
     int C,
     long long inner_size,
-    int64_t ignore_index) { 
+    int64_t ignore_index) {
 
     long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     long long total = (long long)N * inner_size;
-    if (idx >= total) return;
+    if (idx >= total) {
+        return;
+    }
 
     int n = (int)(idx / inner_size);
     int inner = (int)(idx % inner_size);
@@ -64,7 +66,7 @@ __global__ void cross_entropy_loss_kernel(
     // 3. 计算最终 loss
     long long target_offset = base_offset + (long long)t * inner_size;
     float logit_tgt = to_float(logits[target_offset]);
-    
+
     loss[idx] = (T_out)(logf(sum_exp) + max_val - logit_tgt);
 }
 

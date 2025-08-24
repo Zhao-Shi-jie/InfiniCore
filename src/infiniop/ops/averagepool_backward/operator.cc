@@ -20,17 +20,17 @@ __C infiniStatus_t infiniopCreateAvgPoolBackwardDescriptor(
     void *pads,
     bool ceil_mode) {
 
-#define CREATE(CASE, NAMESPACE)                                                         \
-    case CASE:                                                                          \
+#define CREATE(CASE, NAMESPACE)                                                             \
+    case CASE:                                                                              \
         return op::averagepool_backward::NAMESPACE::Descriptor::create(                     \
-            handle,                                                                     \
+            handle,                                                                         \
             reinterpret_cast<op::averagepool_backward::NAMESPACE::Descriptor **>(desc_ptr), \
-            grad_input_desc,                                                            \
-            grad_output_desc,                                                           \
-            input_desc,                                                                 \
-            kernel_size,                                                                \
-            strides,                                                                    \
-            pads,                                                                       \
+            grad_input_desc,                                                                \
+            grad_output_desc,                                                               \
+            input_desc,                                                                     \
+            kernel_size,                                                                    \
+            strides,                                                                        \
+            pads,                                                                           \
             ceil_mode)
 
     switch (handle->device) {
@@ -56,8 +56,8 @@ __C infiniStatus_t infiniopGetAvgPoolBackwardWorkspaceSize(
     infiniopAvgPoolBackwardDescriptor_t desc,
     size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                                                  \
-    case CASE:                                                                                                \
+#define GET(CASE, NAMESPACE)                                                                                      \
+    case CASE:                                                                                                    \
         *size = reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
@@ -89,13 +89,13 @@ __C infiniStatus_t infiniopAvgPoolBackward(
     const void *input,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                                         \
-    case CASE:                                                                             \
+#define CALCULATE(CASE, NAMESPACE)                                                             \
+    case CASE:                                                                                 \
         return reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc) \
-            ->calculate(workspace, workspace_size,                                         \
-                        grad_input,                                                        \
-                        grad_output,                                                       \
-                        input,                                                             \
+            ->calculate(workspace, workspace_size,                                             \
+                        grad_input,                                                            \
+                        grad_output,                                                           \
+                        input,                                                                 \
                         stream)
 
     switch (desc->device_type) {
@@ -119,8 +119,8 @@ __C infiniStatus_t infiniopAvgPoolBackward(
 
 __C infiniStatus_t infiniopDestroyAvgPoolBackwardDescriptor(infiniopAvgPoolBackwardDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                             \
-    case CASE:                                                                              \
+#define DELETE(CASE, NAMESPACE)                                                                 \
+    case CASE:                                                                                  \
         delete reinterpret_cast<const op::averagepool_backward::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS;
 

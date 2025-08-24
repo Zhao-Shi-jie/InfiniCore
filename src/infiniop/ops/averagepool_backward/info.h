@@ -15,7 +15,7 @@ inline bool hasImplicitPadding(
     size_t stride,
     size_t padding,
     bool ceil_mode) {
-    
+
     if (!ceil_mode) {
         return false;
     }
@@ -66,7 +66,7 @@ public:
             }
         }
 
-        info.ndim = input_desc->ndim() - 2; 
+        info.ndim = input_desc->ndim() - 2;
         info.batch = input_desc->dim(0);
         info.channels = input_desc->dim(1);
         info.ceil_mode = ceil_mode;
@@ -85,8 +85,8 @@ public:
             info.pads.push_back(pad_ptr[i]);
 
             // 检查当前维度是否存在隐式填充
-            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i], 
-                                info.strides[i], info.pads[i], info.ceil_mode)) {
+            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i],
+                                   info.strides[i], info.pads[i], info.ceil_mode)) {
                 info.has_implicit_padding = true;
             }
         }

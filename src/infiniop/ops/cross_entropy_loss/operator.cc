@@ -17,12 +17,12 @@ __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
     infiniopTensorDescriptor_t logits_desc,
     infiniopTensorDescriptor_t target_desc) {
 
-#define CREATE(CASE, NAMESPACE)                                                \
-    case CASE:                                                                 \
-        return op::cross_entropy_loss::NAMESPACE::Descriptor::create(          \
-            handle,                                                            \
-            reinterpret_cast<                                                  \
-                op::cross_entropy_loss::NAMESPACE::Descriptor **>(desc_ptr),   \
+#define CREATE(CASE, NAMESPACE)                                              \
+    case CASE:                                                               \
+        return op::cross_entropy_loss::NAMESPACE::Descriptor::create(        \
+            handle,                                                          \
+            reinterpret_cast<                                                \
+                op::cross_entropy_loss::NAMESPACE::Descriptor **>(desc_ptr), \
             loss_desc, logits_desc, target_desc)
 
     switch (handle->device) {
@@ -42,11 +42,11 @@ __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
 __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
     infiniopCrossEntropyLossDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                   \
-    case CASE:                                                                 \
-        *size = reinterpret_cast<                                              \
-            const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc)       \
-                    ->workspaceSize();                                         \
+#define GET(CASE, NAMESPACE)                                                     \
+    case CASE:                                                                   \
+        *size = reinterpret_cast<                                                \
+                    const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc) \
+                    ->workspaceSize();                                           \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
@@ -72,11 +72,11 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
     const void *target,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                             \
-    case CASE:                                                                 \
-        return reinterpret_cast<                                               \
-            const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc)       \
-            ->calculate(workspace, workspace_size, loss, logits, target,       \
+#define CALCULATE(CASE, NAMESPACE)                                              \
+    case CASE:                                                                  \
+        return reinterpret_cast<                                                \
+                   const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc) \
+            ->calculate(workspace, workspace_size, loss, logits, target,        \
                         stream)
 
     switch (desc->device_type) {
@@ -96,10 +96,10 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
 __C infiniStatus_t infiniopDestroyCrossEntropyLossDescriptor(
     infiniopCrossEntropyLossDescriptor_t desc) {
 
-#define DELETE(CASE, NAMESPACE)                                                \
-    case CASE:                                                                 \
-        delete reinterpret_cast<                                               \
-            const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc);      \
+#define DELETE(CASE, NAMESPACE)                                           \
+    case CASE:                                                            \
+        delete reinterpret_cast<                                          \
+            const op::cross_entropy_loss::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {

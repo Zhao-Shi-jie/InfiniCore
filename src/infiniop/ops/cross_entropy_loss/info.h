@@ -1,10 +1,9 @@
 #ifndef __CROSS_ENTROPY_LOSS_INFO_H__
 #define __CROSS_ENTROPY_LOSS_INFO_H__
 
-
 #include "../../../utils.h"
-#include "../../tensor.h"
 #include "../../operator.h"
+#include "../../tensor.h"
 
 namespace op::cross_entropy_loss {
 
@@ -20,8 +19,9 @@ public:
         infiniopTensorDescriptor_t logits,
         infiniopTensorDescriptor_t target) {
 
-        if (logits->ndim() != 2 || loss->ndim() != 1 || target->ndim() != 1)
+        if (logits->ndim() != 2 || loss->ndim() != 1 || target->ndim() != 1) {
             return INFINI_STATUS_BAD_TENSOR_SHAPE;
+        }
 
         CrossEntropyInfo info;
         info.batch = logits->dim(0);
@@ -32,6 +32,5 @@ public:
 };
 
 } // namespace op::cross_entropy_loss
-
 
 #endif // __CROSS_ENTROPY_LOSS_INFO_H__

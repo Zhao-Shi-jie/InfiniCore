@@ -3,19 +3,19 @@
 #include "averagepool_nvidia.cuh"
 
 #define DESTROY_CUDNN_DESCRIPTOR(desc_ptr, destroy_func) \
-  do {                                                   \
-    if (desc_ptr) {                                      \
-      destroy_func(desc_ptr);                            \
-      desc_ptr = nullptr;                                \
-    }                                                    \
-  } while (0)
+    do {                                                 \
+        if (desc_ptr) {                                  \
+            destroy_func(desc_ptr);                      \
+            desc_ptr = nullptr;                          \
+        }                                                \
+    } while (0)
 
-#define CLEANUP_CUDNN_DESCRIPTORS()                                        \
-  do {                                                                     \
-    DESTROY_CUDNN_DESCRIPTOR(input_desc, cudnnDestroyTensorDescriptor);    \
-    DESTROY_CUDNN_DESCRIPTOR(output_desc, cudnnDestroyTensorDescriptor);   \
-    DESTROY_CUDNN_DESCRIPTOR(pooling_desc, cudnnDestroyPoolingDescriptor); \
-  } while (0)
+#define CLEANUP_CUDNN_DESCRIPTORS()                                            \
+    do {                                                                       \
+        DESTROY_CUDNN_DESCRIPTOR(input_desc, cudnnDestroyTensorDescriptor);    \
+        DESTROY_CUDNN_DESCRIPTOR(output_desc, cudnnDestroyTensorDescriptor);   \
+        DESTROY_CUDNN_DESCRIPTOR(pooling_desc, cudnnDestroyPoolingDescriptor); \
+    } while (0)
 
 namespace op::averagepool::nvidia {
 
@@ -35,7 +35,7 @@ private:
 
 #ifdef ENABLE_CUDNN_API
     infiniStatus_t getCudnnDataType(infiniDtype_t data_type,
-                                      cudnnDataType_t &cudnn_data_type) const {
+                                    cudnnDataType_t &cudnn_data_type) const {
         if (data_type == INFINI_DTYPE_F16) {
             cudnn_data_type = device::nvidia::getCudnnDtype(data_type);
         } else if (data_type == INFINI_DTYPE_F32) {
@@ -49,7 +49,7 @@ private:
     }
 
     infiniStatus_t createPoolingDescriptors(const AvgPoolInfo &info,
-                                              cudnnDataType_t cudnn_data_type) {
+                                            cudnnDataType_t cudnn_data_type) {
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
         CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
@@ -93,7 +93,7 @@ private:
             stride_vec.push_back(1);
             pad_vec.push_back(0);
         }
-        
+
         CHECK_CUDNN(cudnnSetPoolingNdDescriptor(
             pooling_desc, CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING, CUDNN_NOT_PROPAGATE_NAN,
             kernel_vec.size(), kernel_vec.data(), pad_vec.data(),
