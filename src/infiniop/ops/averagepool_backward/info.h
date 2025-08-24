@@ -8,6 +8,20 @@
 
 namespace op::averagepool_backward {
 
+// 检查是否存在隐式填充
+inline bool hasImplicitPadding(
+    size_t input_size,
+    size_t kernel_size,
+    size_t stride,
+    size_t padding,
+    bool ceil_mode) {
+    
+    if (!ceil_mode) {
+        return false;
+    }
+    return ((input_size + 2 * padding) - kernel_size) % stride != 0;
+}
+
 class AvgPoolBackwardInfo {
     AvgPoolBackwardInfo() = default;
 
@@ -21,6 +35,7 @@ public:
     size_t ndim;
     size_t batch;
     size_t channels;
+    bool has_implicit_padding = false;
 
     static utils::Result<AvgPoolBackwardInfo> create(
         infiniopTensorDescriptor_t grad_input_desc,  // gradient w.r.t. input
@@ -63,6 +78,8 @@ public:
         auto stride_ptr = reinterpret_cast<const size_t *>(strides);
         auto pad_ptr = reinterpret_cast<const size_t *>(pads);
 
+        // 初始化隐式填充标志
+        info.has_implicit_padding = false;
         // Store spatial dimensions and pooling parameters
         for (size_t i = 0; i < info.ndim; ++i) {
             info.input_dims.push_back(input_desc->dim(i + 2));
@@ -70,6 +87,12 @@ public:
             info.kernel_sizes.push_back(kernel_ptr[i]);
             info.strides.push_back(stride_ptr[i]);
             info.pads.push_back(pad_ptr[i]);
+
+            // 检查当前维度是否存在隐式填充
+            if (hasImplicitPadding(info.input_dims[i], info.kernel_sizes[i], 
+                                info.strides[i], info.pads[i], info.ceil_mode)) {
+                info.has_implicit_padding = true;
+            }
         }
 
         return utils::Result<AvgPoolBackwardInfo>(std::move(info));
