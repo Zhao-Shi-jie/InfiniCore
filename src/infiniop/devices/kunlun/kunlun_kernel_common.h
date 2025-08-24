@@ -4,17 +4,25 @@
 // This header file will only be include by .xpu file
 #include "xpu/runtime.h"
 #include <xpu/kernel/xtdk.h>
+#include <xpu/kernel/xtdk_atomic_sm_xpu3.h>
 #include <xpu/kernel/xtdk_bf16.h>
 #include <xpu/kernel/xtdk_math.h>
 #include <xpu/kernel/xtdk_simd.h>
+#include <xpu/kernel/xtdk_trigonometric.h>
 
 namespace device::kunlun::kernel {
 
+#define SM_SIZE 10240
+
+/**
+ * @brief Define ptrdiff_t and size_t for kunlun xpu
+ * ptrdiff_t is 32 bit, size_t is 32 bit in xpu kernel
+ * We padding it into 64 bit for convience of DATACOPY
+ */
 typedef struct _ptrdiff_t {
     int32_t value;   // 32 bit
     int32_t padding; // 32 bit
 } _ptrdiff_t;
-
 // same as ptrdiff
 typedef struct _size_t {
     uint32_t value;
@@ -29,15 +37,81 @@ inline __device__ float lowerBitMask(int i) {
     return (1 << (i + 1)) - 1;
 }
 
-// Atomic add for reduce
-inline __device__ void atomicAddF32(__shared_ptr__ float *ptr, float value) {
-    int success = 1;
-    while (success) {
-        // SM2REG read 32bit data to register
-        float a = SM2REG_atomic(ptr);
-        a = a + value;
-        success = REG2SM_atomic(ptr, a);
+/**
+ * @brief Load data from shared memory
+ * @param p: pointer to shared memory
+ * @return loaded value
+ */
+template <typename T>
+__device__ inline T loadsm(__shared_ptr__ const T *p) {
+    T v;
+    if constexpr (std::is_same<T, half>::value
+                  || std::is_same<T, bfloat16_t>::value) {
+        __builtin_memcpy(&v, p, sizeof(T));
+    } else {
+        v = *p;
     }
+    return v;
+}
+// Load len data from shared memory
+template <typename T>
+__device__ inline void loadsm(__shared_ptr__ const T *p, T *v, int len) {
+    __builtin_memcpy(v, p, len * sizeof(T));
+}
+
+/**
+ * @brief Convert data type. All data is in local memory
+ * @param v: input value
+ * @return output value
+ */
+template <typename Tout, typename Tin>
+__device__ inline Tout to(Tin v) {
+    if constexpr (std::is_same<Tin, half>::value) {
+        return __half2float(v);
+    } else if constexpr (std::is_same<Tin, bfloat16_t>::value) {
+        return __bfloat162float(v);
+    } else {
+        return static_cast<Tout>(v);
+    }
+}
+
+/**
+ * @brief atomicAdd for kunlun xpu
+ * @param ptr: pointer to shared memory
+ * @param value: value to add
+ */
+template <typename T>
+inline __device__ T atomicAdd(__shared_ptr__ T *ptr, T value) {
+    T x = atomicadd(ptr, value);
+    return x;
+}
+// Specialize atomicAdd for half
+template <>
+inline __device__ half atomicAdd<half>(__shared_ptr__ half *ptr, half value) {
+    ticket_lock_mix();
+    __half old = loadsm(ptr);
+    float of = __half2float(old);
+    float vf = __half2float(value);
+    float sumf = of + vf;
+    half sum = __float2half_rn(sumf);
+    *ptr = sum;
+    mfence_sm();
+    ticket_unlock_mix();
+    return old;
+}
+// Specialize atomicAdd for bfloat16_t
+template <>
+inline __device__ bfloat16_t atomicAdd<bfloat16_t>(__shared_ptr__ bfloat16_t *ptr, bfloat16_t value) {
+    ticket_lock_mix();
+    bfloat16_t old = loadsm(ptr);
+    float of = __bfloat162float(old);
+    float vf = __bfloat162float(value);
+    float sumf = of + vf;
+    bfloat16_t sum = __float2bfloat16_rn(sumf);
+    *ptr = sum;
+    mfence_sm();
+    ticket_unlock_mix();
+    return old;
 }
 
 /**
@@ -85,5 +159,3 @@ inline __device__ int indexToOffset(
 } // namespace device::kunlun::kernel
 
 #endif // __INFINIOP_KUNLUN_KERNEL_COMMON_H__
-// TODO: atomicAddF16
-// TODO: atomicAddI8
