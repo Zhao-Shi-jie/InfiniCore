@@ -1,11 +1,16 @@
-#include "../../../devices/metax/metax_common.h"
-#include "../../../devices/metax/metax_handle.h"
-#include "cross_entropy_metax.h"
 #include <hpcc_fp16.h>
 #include <math.h>
 #include <vector>
 #include <memory>
+#include <numeric>
+#include <limits>
+#include <cstdint> // 用于 int64_t
 
+#include "../../../devices/metax/metax_common.h"
+#include "../../../devices/metax/metax_handle.h"
+#include "cross_entropy_metax.h"
+
+// 引用 kernel.cuh
 #include "../cuda/kernel.cuh"
 
 namespace op::cross_entropy_loss::metax {
@@ -25,9 +30,9 @@ Descriptor::~Descriptor() {
 infiniStatus_t Descriptor::create(
     infiniopHandle_t handle_,
     Descriptor **desc_ptr,
-    infiniopTensorDescriptor_t loss_desc,
+    infiniopTensorDescriptor_t /*loss_desc*/,
     infiniopTensorDescriptor_t logits_desc,
-    infiniopTensorDescriptor_t target_desc) {
+    infiniopTensorDescriptor_t /*target_desc*/) {
 
     auto handle = reinterpret_cast<device::metax::Handle *>(handle_);
     auto dtype = logits_desc->dtype();
@@ -35,33 +40,26 @@ infiniStatus_t Descriptor::create(
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
 
-    const auto &logits_shape = logits_desc->shape();
-    if (logits_shape.size() < 2) return INFINI_STATUS_BAD_TENSOR_SHAPE;
-
     auto opaque = new Opaque(handle->internal());
-    opaque->logits_shape = logits_shape;
+    const auto &orig_shape = logits_desc->shape();
 
-    long long total_elements = logits_shape[0];
-    for (size_t i = 2; i < logits_shape.size(); ++i)
-        total_elements *= logits_shape[i];
+    if (orig_shape.size() == 1) {
+        opaque->logits_shape = {1, orig_shape[0]};
+    } else {
+        opaque->logits_shape = orig_shape;
+    }
+    
+    if (opaque->logits_shape.size() < 2) return INFINI_STATUS_BAD_TENSOR_SHAPE;
 
-    size_t workspace_size = total_elements * logits_shape[1] * sizeof(float);  // optional
+    const auto &s = opaque->logits_shape;
+    long long N = (long long)s[0];
+    long long inner = 1;
+    for (size_t i = 2; i < s.size(); ++i) inner *= (long long)s[i];
+
+    size_t workspace_size = (size_t)(N * inner) * sizeof(float);
     *desc_ptr = new Descriptor(dtype, workspace_size, opaque, handle->device, handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
-}
-
-template <typename T_in, typename T_out>
-inline void launch_softmax_crossentropy(
-    T_out* loss, const T_in* logits, const int* target,
-    int N, int C, long long inner_size, hcStream_t stream) {
-
-    long long total_elements = static_cast<long long>(N) * inner_size;
-    dim3 blockSize(256);
-    dim3 gridSize((total_elements + blockSize.x - 1) / blockSize.x);
-
-    cross_entropy_loss_kernel<T_in><<<gridSize, blockSize, 0, stream>>>(
-        loss, logits, target, N, C, inner_size);
 }
 
 infiniStatus_t Descriptor::calculate(
@@ -69,32 +67,79 @@ infiniStatus_t Descriptor::calculate(
     const void *logits, const void *target, void *stream_) const {
 
     const auto &shape = _opaque->logits_shape;
-    if (shape.size() < 2) return INFINI_STATUS_BAD_TENSOR_SHAPE;
-
-    int N = shape[0];
-    int C = shape[1];
+    int N = (int)shape[0];
+    int C = (int)shape[1];
     long long inner_size = 1;
     for (size_t i = 2; i < shape.size(); ++i)
         inner_size *= shape[i];
 
-    const int *typed_target = reinterpret_cast<const int *>(target);
+    long long total = (long long)N * inner_size;
+
+    size_t need_ws = (size_t)total * sizeof(float);
+    if (workspace_size < need_ws) return INFINI_STATUS_INTERNAL_ERROR;
+    float* per_sample_loss = reinterpret_cast<float*>(workspace);
+
+    const int64_t *typed_target = reinterpret_cast<const int64_t *>(target);
+    const int64_t ignore_index = -100;
     hcStream_t stream = (hcStream_t)stream_;
 
+    dim3 blockSize(256);
+    dim3 gridSize((total + blockSize.x - 1) / blockSize.x);
+
     if (_dtype == INFINI_DTYPE_F32) {
-        launch_softmax_crossentropy<float, float>(
-            (float*)loss, (const float*)logits, typed_target,
-            N, C, inner_size, stream);
+        cross_entropy_loss_kernel<float, float>
+            <<<gridSize, blockSize, 0, stream>>>(
+                per_sample_loss, (const float*)logits, typed_target,
+                N, C, inner_size, ignore_index);
     } else if (_dtype == INFINI_DTYPE_F16) {
-        launch_softmax_crossentropy<half, half>(
-            (half*)loss, (const half*)logits, typed_target,
-            N, C, inner_size, stream);
+        cross_entropy_loss_kernel<half, float>
+            <<<gridSize, blockSize, 0, stream>>>(
+                per_sample_loss, (const half*)logits, typed_target,
+                N, C, inner_size, ignore_index);
     } else if (_dtype == INFINI_DTYPE_BF16) {
-        launch_softmax_crossentropy<__hpcc_bfloat16, __hpcc_bfloat16>(
-            (__hpcc_bfloat16*)loss, (const __hpcc_bfloat16*)logits, typed_target,
-            N, C, inner_size, stream);
+        cross_entropy_loss_kernel<__hpcc_bfloat16, float>
+            <<<gridSize, blockSize, 0, stream>>>(
+                per_sample_loss, (const __hpcc_bfloat16*)logits, typed_target,
+                N, C, inner_size, ignore_index);
     } else {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
+    if (hcGetLastError() != hcSuccess) return INFINI_STATUS_INTERNAL_ERROR;
+
+    std::vector<float> h_loss((size_t)total);
+    std::vector<int64_t> h_target((size_t)total);
+    if (hcMemcpyAsync(h_loss.data(), per_sample_loss, need_ws, hcMemcpyDeviceToHost, stream) != hcSuccess)
+        return INFINI_STATUS_INTERNAL_ERROR;
+    if (hcMemcpyAsync(h_target.data(), typed_target, (size_t)total * sizeof(int64_t), hcMemcpyDeviceToHost, stream) != hcSuccess)
+        return INFINI_STATUS_INTERNAL_ERROR;
+    if (hcStreamSynchronize(stream) != hcSuccess)
+        return INFINI_STATUS_INTERNAL_ERROR;
+
+    double acc = 0.0;
+    long long count = 0;
+    for (long long i = 0; i < total; ++i) {
+        if (h_target[i] != ignore_index) {
+            acc += (double)h_loss[i];
+            count++;
+        }
+    }
+    double mean = (count > 0) ? (acc / (double)count) : 0.0;
+
+    if (_dtype == INFINI_DTYPE_F32) {
+        float v = (float)mean;
+        if (hcMemcpyAsync(loss, &v, sizeof(float), hcMemcpyHostToDevice, stream) != hcSuccess)
+            return INFINI_STATUS_INTERNAL_ERROR;
+    } else if (_dtype == INFINI_DTYPE_F16) {
+        half v = __float2half((float)mean);
+        if (hcMemcpyAsync(loss, &v, sizeof(half), hcMemcpyHostToDevice, stream) != hcSuccess)
+            return INFINI_STATUS_INTERNAL_ERROR;
+    } else if (_dtype == INFINI_DTYPE_BF16) {
+        __hpcc_bfloat16 v = __float2bfloat16_rn((float)mean);
+        if (hcMemcpyAsync(loss, &v, sizeof(__hpcc_bfloat16), hcMemcpyHostToDevice, stream) != hcSuccess)
+            return INFINI_STATUS_INTERNAL_ERROR;
+    }
+    if (hcStreamSynchronize(stream) != hcSuccess)
+        return INFINI_STATUS_INTERNAL_ERROR;
 
     return INFINI_STATUS_SUCCESS;
 }
