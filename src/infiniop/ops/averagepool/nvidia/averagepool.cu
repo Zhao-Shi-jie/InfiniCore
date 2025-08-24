@@ -50,12 +50,10 @@ private:
 
     infiniStatus_t createPoolingDescriptors(const AvgPoolInfo &info,
                                               cudnnDataType_t cudnn_data_type) {
-        // Create CUDNN descriptors
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
         CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
 
-        // Setup tensor descriptors, exactly replicating max_pool's logic
         std::vector<int> input_dims_vec = {static_cast<int>(info.batch),
                                            static_cast<int>(info.channels)};
         std::vector<int> output_dims_vec = {static_cast<int>(info.batch),
@@ -67,7 +65,6 @@ private:
         }
 
         if (info.ndim == 1) {
-            // For 1D pooling, add dummy dimension
             input_dims_vec.push_back(1);
             output_dims_vec.push_back(1);
         }
@@ -84,7 +81,6 @@ private:
     }
 
     infiniStatus_t setupPoolingDescriptor(const AvgPoolInfo &info) {
-        // Setup pooling descriptor, exactly replicating max_pool's logic
         std::vector<int> kernel_vec, stride_vec, pad_vec;
         for (size_t i = 0; i < info.ndim; ++i) {
             kernel_vec.push_back(static_cast<int>(info.kernel_sizes[i]));
@@ -93,13 +89,11 @@ private:
         }
 
         if (info.ndim == 1) {
-            // For 1D pooling, add dummy dimension, exactly as in max_pool
             kernel_vec.push_back(1);
             stride_vec.push_back(1);
             pad_vec.push_back(0);
         }
         
-        // This is the ONLY functional difference from max_pool_nvidia.cu
         CHECK_CUDNN(cudnnSetPoolingNdDescriptor(
             pooling_desc, CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING, CUDNN_NOT_PROPAGATE_NAN,
             kernel_vec.size(), kernel_vec.data(), pad_vec.data(),

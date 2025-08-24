@@ -62,13 +62,11 @@ private:
 
     infiniStatus_t createPoolingDescriptors(const AvgPoolBackwardInfo &info,
                                           cudnnDataType_t cudnn_data_type) {
-        // Create CUDNN descriptors
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&grad_input_desc));
         CHECK_CUDNN(cudnnCreateTensorDescriptor(&grad_output_desc));
         CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_backward_desc));
 
-        // Setup tensor descriptors
         std::vector<int> input_dims_vec = {static_cast<int>(info.batch),
                                            static_cast<int>(info.channels)};
         std::vector<int> output_dims_vec = {static_cast<int>(info.batch),
@@ -80,19 +78,16 @@ private:
         }
 
         if (info.ndim == 1) {
-            // For 1D pooling, add dummy dimension
             input_dims_vec.push_back(1);
             output_dims_vec.push_back(1);
         }
 
-        // Calculate memory strides
         std::vector<int> input_strides_vec(input_dims_vec.size());
         std::vector<int> output_strides_vec(output_dims_vec.size());
         calculateStrides(input_dims_vec, input_strides_vec, input_dims_vec.size());
         calculateStrides(output_dims_vec, output_strides_vec,
                          output_dims_vec.size());
 
-        // Set tensor descriptors with strides
         CHECK_CUDNN(cudnnSetTensorNdDescriptor(
             input_desc, cudnn_data_type, input_dims_vec.size(),
             input_dims_vec.data(), input_strides_vec.data()));
@@ -109,7 +104,6 @@ private:
     }
 
     infiniStatus_t setupPoolingDescriptor(const AvgPoolBackwardInfo &info) {
-        // Setup pooling descriptor
         std::vector<int> kernel_vec, stride_vec, pad_vec;
         for (size_t i = 0; i < info.ndim; ++i) {
             kernel_vec.push_back(static_cast<int>(info.kernel_sizes[i]));
@@ -118,7 +112,6 @@ private:
         }
 
         if (info.ndim == 1) {
-            // For 1D pooling, add dummy dimension
             kernel_vec.push_back(1);
             stride_vec.push_back(1);
             pad_vec.push_back(0);
@@ -140,7 +133,6 @@ private:
         CHECK_STATUS(createPoolingDescriptors(info, cudnn_data_type));
         CHECK_STATUS(setupPoolingDescriptor(info));
 
-        // Calculate workspace size, workspace is required for forward output
         CHECK_CUDNN(cudnnGetTensorSizeInBytes(grad_output_desc, &workspace_size));
 
         return INFINI_STATUS_SUCCESS;
@@ -241,20 +233,17 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
 
     CHECK_STATUS(_opaque->internal->useCudnn(
         (cudaStream_t)stream, [&](cudnnHandle_t handle) {
-            // Replicating maxpool_backward's memory initialization for safety
             size_t grad_input_size = 0;
             CHECK_CUDNN(cudnnGetTensorSizeInBytes(_opaque->grad_input_desc,
                                                   &grad_input_size));
             CHECK_CUDA(cudaMemset(grad_input, 0, grad_input_size));
             CHECK_CUDA(cudaMemset(workspace, 0, _workspace_size));
 
-            // Replicating temporary forward pass for safety
             void *temp_output = workspace;
             CHECK_CUDNN(cudnnPoolingForward(
                 handle, _opaque->pooling_backward_desc, &alpha, _opaque->input_desc,
                 input, &beta, _opaque->grad_output_desc, temp_output));
             
-            // The backward call now uses the same signature as maxpool_backward
             CHECK_CUDNN(cudnnPoolingBackward(
                 handle, _opaque->pooling_backward_desc, &alpha,
                 _opaque->grad_output_desc, temp_output, 

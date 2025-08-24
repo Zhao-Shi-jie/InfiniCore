@@ -2,10 +2,6 @@
 #include "../../handle.h"
 #include "infiniop/ops/cross_entropy_loss.h"
 
-// 后端实现头文件
-// #ifdef ENABLE_CPU_API
-// #include "cpu/cross_entropy_loss_cpu.h"  // CPU 后端暂未实现
-// #endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/cross_entropy_loss_nvidia.cuh"
 #endif
@@ -14,7 +10,6 @@
 #include "metax/cross_entropy_metax.h"
 #endif
 
-// --- 1. 创建描述符的函数 ---
 __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
     infiniopHandle_t handle,
     infiniopCrossEntropyLossDescriptor_t *desc_ptr,
@@ -31,9 +26,6 @@ __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
             loss_desc, logits_desc, target_desc)
 
     switch (handle->device) {
-#ifdef ENABLE_CPU_API
-        // CREATE(INFINI_DEVICE_CPU, cpu);
-#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -47,7 +39,6 @@ __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
 #undef CREATE
 }
 
-// --- 2. 获取工作空间大小 ---
 __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
     infiniopCrossEntropyLossDescriptor_t desc, size_t *size) {
 
@@ -59,9 +50,6 @@ __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
-#ifdef ENABLE_CPU_API
-        // GET(INFINI_DEVICE_CPU, cpu);
-#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -75,7 +63,6 @@ __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
 #undef GET
 }
 
-// --- 3. 执行计算 ---
 __C infiniStatus_t infiniopCrossEntropyLoss(
     infiniopCrossEntropyLossDescriptor_t desc,
     void *workspace,
@@ -93,9 +80,6 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
                         stream)
 
     switch (desc->device_type) {
-#ifdef ENABLE_CPU_API
-        // CALCULATE(INFINI_DEVICE_CPU, cpu);
-#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -109,7 +93,6 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
 #undef CALCULATE
 }
 
-// --- 4. 销毁描述符 ---
 __C infiniStatus_t infiniopDestroyCrossEntropyLossDescriptor(
     infiniopCrossEntropyLossDescriptor_t desc) {
 
@@ -120,9 +103,6 @@ __C infiniStatus_t infiniopDestroyCrossEntropyLossDescriptor(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
-#ifdef ENABLE_CPU_API
-        // DELETE(INFINI_DEVICE_CPU, cpu);
-#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif

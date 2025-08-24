@@ -21,11 +21,10 @@ from libinfiniop import (
 )
 from torch.nn import functional as F
 
-# 修正测例，确保 logits 维度与类别数匹配
 _TEST_CASES = [
     # Single sample classification
     ((10,), 10),
-    ((200,), 200),  # 修正：200个类别对应200个logits
+    ((200,), 200), 
     
     # 2D: (N, C) - batch classification
     ((4, 10), 10),
@@ -55,7 +54,6 @@ DEBUG = False
 PROFILE = False
 
 def cross_entropy_loss_pytorch(logits, target):
-    """使用PyTorch计算交叉熵损失，使用双精度并且reduction='mean'"""
     return F.cross_entropy(logits.double(), target.long(), reduction="mean")
 
 def test(

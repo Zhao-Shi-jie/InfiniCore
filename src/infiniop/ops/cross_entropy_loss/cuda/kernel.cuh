@@ -3,9 +3,8 @@
 
 #include <hpcc_fp16.h>
 #include <math.h>
-#include <cstdint> // for int64_t
+#include <cstdint> 
 
-// to_float 转换函数，用于将不同类型的输入转换为 float 进行计算
 __device__ __forceinline__ float to_float(float val) {
     return val;
 }
@@ -20,13 +19,13 @@ __device__ __forceinline__ float to_float(__hpcc_bfloat16 val) {
 
 template <typename T_in, typename T_out>
 __global__ void cross_entropy_loss_kernel(
-    T_out* loss,          // 输出到 workspace，类型为 float
+    T_out* loss,          
     const T_in* logits,
-    const int64_t* target, // target 类型为 int64_t
+    const int64_t* target, 
     int N,
     int C,
     long long inner_size,
-    int64_t ignore_index) { // 增加 ignore_index
+    int64_t ignore_index) { 
 
     long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     long long total = (long long)N * inner_size;
@@ -37,7 +36,6 @@ __global__ void cross_entropy_loss_kernel(
 
     int64_t t = target[idx];
 
-    // 检查 ignore_index 和 target 范围
     if (t == ignore_index) {
         loss[idx] = (T_out)0.0f;
         return;
@@ -64,12 +62,9 @@ __global__ void cross_entropy_loss_kernel(
     }
 
     // 3. 计算最终 loss
-    // loss = log(sum_exp) + max_val - logit_at_target
     long long target_offset = base_offset + (long long)t * inner_size;
     float logit_tgt = to_float(logits[target_offset]);
     
-    // lse = log(sum_exp) + max_val
-    // loss = lse - logit_tgt
     loss[idx] = (T_out)(logf(sum_exp) + max_val - logit_tgt);
 }
 

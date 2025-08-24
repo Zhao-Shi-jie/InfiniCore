@@ -144,7 +144,6 @@ infiniStatus_t launch_avgpool_pytorch_kernel(
         return INFINI_STATUS_BAD_PARAM;
     }
     
-    // CHECK_HC(hcGetLastError()); // 如果需要的话取消注释
     return INFINI_STATUS_SUCCESS;
 }
 

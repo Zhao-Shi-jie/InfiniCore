@@ -16,11 +16,10 @@ __global__ void avgpool1d_pytorch_backward_kernel(
         return;
     }
 
-    // Pointers for the specific batch and channel
     const T *grad_output_ptr = grad_output + batch_idx * channels * output_length + channel_idx * output_length;
     T *grad_input_ptr = grad_input + batch_idx * channels * input_length + channel_idx * input_length;
 
-    // Get the gradient value from the output
+    // 从输出中获取梯度值
     float grad = static_cast<float>(grad_output_ptr[output_idx]);
     int window_start = output_idx * stride - padding;
 
@@ -64,7 +63,7 @@ __global__ void avgpool2d_pytorch_backward_kernel(
         return;
     }
 
-    // Convert linear output index to 2D coordinates
+    // 将线性输出索引转换为二维坐标
     int out_h = output_idx / output_width;
     int out_w = output_idx % output_width;
 
@@ -125,7 +124,7 @@ __global__ void avgpool3d_pytorch_backward_kernel(
         return;
     }
 
-    // Convert linear output index to 3D coordinates
+    // 将线性输出索引转换为三维坐标
     int out_d = output_idx / (output_height * output_width);
     int remaining = output_idx % (output_height * output_width);
     int out_h = remaining / output_width;

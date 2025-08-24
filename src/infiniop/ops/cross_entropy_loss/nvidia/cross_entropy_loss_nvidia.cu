@@ -1,7 +1,7 @@
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
 #include <math_constants.h>
-#include <limits.h>   // LLONG_MIN
+#include <limits.h> 
 #include <stdio.h>
 #include <numeric>
 #include <vector>
@@ -53,7 +53,7 @@ __global__ void softmaxCrossEntropy_per_sample(
 
     float lse     = logf(sum_exp) + m;
     float logit_t = to_float(logits[base + (long long)(int)t * inner_size]);
-    loss[idx]     = (T_out)(lse - logit_t);   // = -log_softmax(x)[t]
+    loss[idx]     = (T_out)(lse - logit_t);   
 }
 
 } // namespace cuda
@@ -82,7 +82,6 @@ infiniStatus_t Descriptor::create(
     const auto &orig = logits_desc->shape();
     auto opaque = new Opaque(handle->internal());
 
-    // (C,) -> (1, C)
     if (orig.size() == 1) opaque->logits_shape = {1, orig[0]};
     else                  opaque->logits_shape = orig;
 
@@ -91,7 +90,6 @@ infiniStatus_t Descriptor::create(
     long long inner = 1;
     for (size_t i = 2; i < s.size(); ++i) inner *= (long long)s[i];
 
-    // workspace 只需要 N*inner 个逐样本 loss（float）
     size_t workspace_size = (size_t)(N * inner) * sizeof(float);
     *desc_ptr = new Descriptor(dtype, workspace_size, opaque, handle->device, handle->device_id);
     return INFINI_STATUS_SUCCESS;
@@ -112,12 +110,11 @@ infiniStatus_t Descriptor::calculate(
     for (size_t i = 2; i < s.size(); ++i) inner *= (long long)s[i];
     long long total = (long long)N * inner;
 
-    // 工作区作为 per-sample loss（float）
     size_t need_ws = (size_t)total * sizeof(float);
     if (workspace_size < need_ws) return INFINI_STATUS_INTERNAL_ERROR;
     float* per_sample = reinterpret_cast<float*>(workspace);
 
-    const int64_t* tgt_i64 = reinterpret_cast<const int64_t*>(target);  // I64
+    const int64_t* tgt_i64 = reinterpret_cast<const int64_t*>(target); 
     const int64_t ignore_index = -100;
 
     // 1) 写 per-sample loss -> workspace（float）

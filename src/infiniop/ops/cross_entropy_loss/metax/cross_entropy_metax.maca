@@ -4,13 +4,11 @@
 #include <memory>
 #include <numeric>
 #include <limits>
-#include <cstdint> // 用于 int64_t
-
+#include <cstdint> 
 #include "../../../devices/metax/metax_common.h"
 #include "../../../devices/metax/metax_handle.h"
 #include "cross_entropy_metax.h"
 
-// 引用 kernel.cuh
 #include "../cuda/kernel.cuh"
 
 namespace op::cross_entropy_loss::metax {

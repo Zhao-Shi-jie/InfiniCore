@@ -48,7 +48,6 @@ public:
 
         AvgPoolBackwardInfo info;
 
-        // Validate tensor dimensions
         if (input_desc->ndim() < 3 || input_desc->ndim() > 5) {
             return INFINI_STATUS_BAD_TENSOR_SHAPE;
         }
@@ -57,19 +56,17 @@ public:
             return INFINI_STATUS_BAD_TENSOR_SHAPE;
         }
 
-        // Check batch and channel dimensions match across all tensors
         if (input_desc->dim(0) != grad_input_desc->dim(0) || input_desc->dim(1) != grad_input_desc->dim(1) || grad_output_desc->dim(0) != grad_input_desc->dim(0) || grad_output_desc->dim(1) != grad_input_desc->dim(1)) {
             return INFINI_STATUS_BAD_TENSOR_SHAPE;
         }
 
-        // Check spatial dimensions consistency between input and its gradient
         for (size_t i = 2; i < input_desc->ndim(); ++i) {
             if (input_desc->dim(i) != grad_input_desc->dim(i)) {
                 return INFINI_STATUS_BAD_TENSOR_SHAPE;
             }
         }
 
-        info.ndim = input_desc->ndim() - 2; // spatial dimensions
+        info.ndim = input_desc->ndim() - 2; 
         info.batch = input_desc->dim(0);
         info.channels = input_desc->dim(1);
         info.ceil_mode = ceil_mode;
@@ -80,7 +77,6 @@ public:
 
         // 初始化隐式填充标志
         info.has_implicit_padding = false;
-        // Store spatial dimensions and pooling parameters
         for (size_t i = 0; i < info.ndim; ++i) {
             info.input_dims.push_back(input_desc->dim(i + 2));
             info.output_dims.push_back(grad_output_desc->dim(i + 2));

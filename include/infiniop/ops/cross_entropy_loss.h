@@ -1,14 +1,9 @@
 #ifndef __INFINIOP_CROSS_ENTROPY_LOSS_API_H__
 #define __INFINIOP_CROSS_ENTROPY_LOSS_API_H__
 
-// 引入定义了 InfiniopDescriptor 的头文件
 #include "../operator_descriptor.h"
 
-// 将通用的描述符指针定义为 CrossEntropyLoss 专用的描述符类型
-// 这与 add.h 中的做法完全一致
 typedef struct InfiniopDescriptor *infiniopCrossEntropyLossDescriptor_t;
-
-// --- 算子生命周期函数声明 ---
 
 // 1. 创建描述符
 __C __export infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(

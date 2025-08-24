@@ -4,7 +4,7 @@
 #include "../cuda/averagepool_backward_kernel.cuh"
 #include <cstdio>
 
-// Launcher function for the handwritten backward kernels
+// 自定义核函数
 infiniStatus_t launch_avgpool_pytorch_backward_kernel(
     const op::averagepool_backward::AvgPoolBackwardInfo& info,
     const void* grad_output, void* grad_input,
@@ -36,7 +36,6 @@ infiniStatus_t launch_avgpool_pytorch_backward_kernel(
     int channels = static_cast<int>(info.channels);
     
     if (info.ndim == 1) {
-        // 1D平均池化 - 后向
         int input_length = static_cast<int>(info.input_dims[0]);
         int output_length = static_cast<int>(info.output_dims[0]);
         int kernel_size = static_cast<int>(info.kernel_sizes[0]);
@@ -44,7 +43,6 @@ infiniStatus_t launch_avgpool_pytorch_backward_kernel(
         int padding = static_cast<int>(info.pads[0]);
         
         dim3 blockSize(256);
-        // 后向的Grid是基于输出维度来分发的
         dim3 gridSize(batch_size, channels, (output_length + blockSize.x - 1) / blockSize.x);
         
         switch (data_type) {
@@ -235,12 +233,6 @@ private:
     while (input_dims_vec.size() < 5)  input_dims_vec.push_back(1);
     while (output_dims_vec.size() < 5) output_dims_vec.push_back(1);
 
-    // 1D池化补充维度
-    // if (info.ndim == 1) {
-    //   input_dims_vec.push_back(1);
-    //   output_dims_vec.push_back(1);
-    // }
-
     // 计算内存步幅
     std::vector<int> input_strides_vec(input_dims_vec.size());
     std::vector<int> output_strides_vec(output_dims_vec.size());
@@ -271,13 +263,6 @@ private:
       stride_vec.push_back(static_cast<int>(info.strides[i]));
       pad_vec.push_back(static_cast<int>(info.pads[i]));
     }
-
-    // 1D池化补充维度
-    // if (info.ndim == 1) {
-    //   kernel_vec.push_back(1);
-    //   stride_vec.push_back(1);
-    //   pad_vec.push_back(0);
-    // }
 
     while (kernel_vec.size() < 3) kernel_vec.push_back(1);
     while (stride_vec.size() < 3) stride_vec.push_back(1);

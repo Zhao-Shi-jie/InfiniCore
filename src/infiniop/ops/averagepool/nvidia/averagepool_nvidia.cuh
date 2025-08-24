@@ -3,7 +3,6 @@
 
 #include "../averagepool.h"
 
-// This macro expands to the full class definition for the 'nvidia' namespace
 DESCRIPTOR(nvidia)
 
 #endif // __AVERAGEPOOL_CUDA_CUH__
