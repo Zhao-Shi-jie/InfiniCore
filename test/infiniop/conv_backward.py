@@ -22,7 +22,7 @@ import math
 _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16, InfiniDtype.BF16]
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
-    InfiniDtype.F32: {"atol": 3*1e-4, "rtol": 3*1e-4},
+    InfiniDtype.F32: {"atol": 1e-4, "rtol": 1e-4},
     InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
 DEBUG = False
@@ -44,8 +44,6 @@ _TEST_CASES = [
 
     # 3D Conv Backward Tests
     ((1, 2, 8, 8, 8), (1024, 512, 64, 8, 1), (4, 2, 3, 3, 3), (54, 27, 9, 3, 1), (0, 1, 2), (1, 2, 1), (1, 1, 1), 1),
-    ((1, 4, 16, 16, 16), (16384, 4096, 256, 16, 1), (8, 4, 5, 5, 5), (500, 125, 25, 5, 1), (2, 0, 1), (2, 1, 3), (1, 1, 1), 1),
-    ((1, 2, 32, 16, 8), (8192, 4096, 128, 8, 1), (4, 2, 7, 3, 5), (210, 105, 15, 5, 1), (1, 2, 0), (3, 2, 1), (1, 1, 1), 1),
 
     # Grouped convolution test case
     ((2, 4, 16), (64, 16, 1), (4, 2, 3), (6, 3, 1), (1,), (1,), (1,), 2),

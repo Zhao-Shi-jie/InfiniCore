@@ -46,7 +46,7 @@ _TEST_CASES = [
 
 _TENSOR_DTYPES = [InfiniDtype.F32, InfiniDtype.F16, InfiniDtype.BF16]
 _TOLERANCE_MAP = {
-    InfiniDtype.F16: {"atol": 1e-2, "rtol": 1e-2},
+    InfiniDtype.F16: {"atol": 1e-3, "rtol": 1e-3},
     InfiniDtype.F32: {"atol": 1e-5, "rtol": 1e-5},
     InfiniDtype.BF16: {"atol": 1e-2, "rtol": 1e-2},
 }
