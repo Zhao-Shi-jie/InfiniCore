@@ -57,7 +57,7 @@ __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
 #ifdef ENABLE_ILUVATAR_API
-        CREATE(INFINI_DEVICE_ILUVATAR, nvidia);
+        GET(INFINI_DEVICE_ILUVATAR, nvidia);
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
@@ -90,7 +90,7 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
 #ifdef ENABLE_ILUVATAR_API
-        CREATE(INFINI_DEVICE_ILUVATAR, nvidia);
+        CALCULATE(INFINI_DEVICE_ILUVATAR, nvidia);
 #endif
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
@@ -116,7 +116,7 @@ __C infiniStatus_t infiniopDestroyCrossEntropyLossDescriptor(
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
 #ifdef ENABLE_ILUVATAR_API
-        CREATE(INFINI_DEVICE_ILUVATAR, nvidia);
+        DELETE(INFINI_DEVICE_ILUVATAR, nvidia);
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
