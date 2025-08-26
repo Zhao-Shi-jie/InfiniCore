@@ -22,9 +22,6 @@ std::shared_ptr<Test> Test::build(
     std::unordered_map<std::string, std::vector<uint8_t>> attributes,
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors,
     double rtol, double atol) {
-
-    std::cout << "DEBUG: averagepool::Test::build called" << std::endl;
-
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
 
@@ -109,33 +106,6 @@ std::shared_ptr<Test> Test::build(
         throw std::runtime_error("Invalid ceil_mode data size");
     }
 
-    // 调试信息
-    std::cout << "DEBUG: Pool dimensions: " << pool_ndim << std::endl;
-    std::cout << "DEBUG: After broadcasting:\n";
-    std::cout << "  kernel_size: [";
-    for (size_t i = 0; i < test->_attributes->kernel_size.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << test->_attributes->kernel_size[i];
-    }
-    std::cout << "]\n  stride: [";
-    for (size_t i = 0; i < test->_attributes->stride.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << test->_attributes->stride[i];
-    }
-    std::cout << "]\n  padding: [";
-    for (size_t i = 0; i < test->_attributes->padding.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << test->_attributes->padding[i];
-    }
-    std::cout << "]\n  ceil_mode: "
-              << (test->_attributes->ceil_mode ? "true" : "false") << std::endl;
-
     return test;
 }
 
@@ -150,15 +120,6 @@ std::shared_ptr<infiniop_test::Result> Test::run(
 
     auto input_dtype = input->ggml_type();
     auto output_shape = expected_output->shape();
-
-    std::cout << "DEBUG: output shape: [";
-    for (size_t i = 0; i < output_shape.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << output_shape[i];
-    }
-    std::cout << "]" << std::endl;
 
     size_t output_size_bytes = 1;
     for (auto d : output_shape) {
@@ -179,51 +140,12 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     auto actual_output = std::make_shared<Tensor>(
         output_memory, 0, output_shape, output_strides, input_dtype);
 
-    std::cout << "DEBUG: actual_output created successfully" << std::endl;
-
     // 参数指针（按底层接口需要传 void*）
     void *kernel_size_ptr = _attributes->kernel_size.data();
     void *stride_ptr = _attributes->stride.data();
     void *padding_ptr = _attributes->padding.data();
 
-    // 调试打印
-    std::cout << "DEBUG: AvgPool parameters:\n";
-    std::cout << "  kernel_size: [";
-    for (size_t i = 0; i < _attributes->kernel_size.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << _attributes->kernel_size[i];
-    }
-    std::cout << "]\n  stride: [";
-    for (size_t i = 0; i < _attributes->stride.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << _attributes->stride[i];
-    }
-    std::cout << "]\n  padding: [";
-    for (size_t i = 0; i < _attributes->padding.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << _attributes->padding[i];
-    }
-    std::cout << "]\n  ceil_mode: "
-              << (_attributes->ceil_mode ? "true" : "false") << std::endl;
-
-    std::cout << "DEBUG: input shape: [";
-    auto input_shape = input->shape();
-    for (size_t i = 0; i < input_shape.size(); ++i) {
-        if (i) {
-            std::cout << ", ";
-        }
-        std::cout << input_shape[i];
-    }
-    std::cout << "], dtype: " << input->ggml_type() << std::endl;
-
     // ---- 创建算子描述符 ----
-    std::cout << "DEBUG: Creating avg pool descriptor..." << std::endl;
     CHECK_OR(infiniopCreateAvgPoolDescriptor(
                  handle, &op_desc,
                  actual_output->desc(),

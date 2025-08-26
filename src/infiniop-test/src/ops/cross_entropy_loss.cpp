@@ -13,14 +13,10 @@ struct Test::Attributes {
     std::shared_ptr<Tensor> loss;
 };
 
-// build 方法：从 gguf 文件中解析张量和属性
 std::shared_ptr<Test> Test::build(
     std::unordered_map<std::string, std::vector<uint8_t>> attributes,
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors,
     double rtol, double atol) {
-
-    // 打印调试信息，确认 build 方法被调用
-    std::cout << "DEBUG: cross_entropy_loss::Test::build called" << std::endl;
 
     auto test = std::shared_ptr<Test>(new Test(rtol, atol));
     test->_attributes = new Attributes();
@@ -34,19 +30,9 @@ std::shared_ptr<Test> Test::build(
     test->_attributes->target = tensors["target"];
     test->_attributes->loss = tensors["loss"];
 
-    // 新增：打印 target 前几个元素
-    std::cout << "DEBUG: target 张量前5个元素: ";
-    auto targetTensor = test->_attributes->target;
-    const int64_t *data = static_cast<const int64_t *>(targetTensor->data()); // 按实际类型调整
-    for (size_t i = 0; i < 3; ++i) {
-        std::cout << data[i] << " ";
-    }
-    std::cout << std::endl;
-
     return test;
 }
 
-// run 方法：执行算子并验证结果
 std::shared_ptr<infiniop_test::Result> Test::run(
     infiniopHandle_t handle, infiniDevice_t device, int device_id,
     size_t warm_ups, size_t iterations) {
@@ -78,7 +64,6 @@ std::shared_ptr<infiniop_test::Result> Test::run(
         output_memory, 0, output_shape, output_strides, logits->ggml_type());
 
     // 1. 创建算子描述符
-    std::cout << "DEBUG: Creating cross entropy loss descriptor..." << std::endl;
     CHECK_OR(infiniopCreateCrossEntropyLossDescriptor(
                  handle, &op_desc,
                  actual_output->desc(),

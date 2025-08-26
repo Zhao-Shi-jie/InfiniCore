@@ -22,20 +22,26 @@ inline utils::Result<size_t> calculateMaxPoolOutputSize(
         return utils::Result<size_t>(INFINI_STATUS_BAD_PARAM);
     }
 
-    size_t padded_input_size = input_size + 2 * padding;
-
-    if (padded_input_size < kernel_size) {
-        return utils::Result<size_t>(INFINI_STATUS_BAD_TENSOR_SHAPE);
-    }
-
-    size_t output_size;
+    // 理论最大输出数
+    size_t max_output = 0;
     if (ceil_mode) {
-        output_size = (padded_input_size - kernel_size + stride - 1) / stride + 1;
+        max_output = (input_size + 2 * padding - kernel_size + stride - 1) / stride + 1;
     } else {
-        output_size = (padded_input_size - kernel_size) / stride + 1;
+        max_output = (input_size + 2 * padding - kernel_size) / stride + 1;
     }
 
-    return utils::Result<size_t>(output_size);
+    size_t valid_output = 0;
+    for (size_t i = 0; i < max_output; ++i) {
+        int64_t start = static_cast<int64_t>(i) * stride - padding;
+        int64_t end = start + kernel_size;
+        // 判断区间 [start, end) 和 [0, input_size) 是否有交集
+        int64_t real_start = std::max(start, int64_t(0));
+        int64_t real_end = std::min(end, int64_t(input_size));
+        if (real_end > real_start) {
+            ++valid_output;
+        }
+    }
+    return utils::Result<size_t>(valid_output);
 }
 
 class MaxPoolInfo {

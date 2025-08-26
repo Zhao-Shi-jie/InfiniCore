@@ -61,6 +61,21 @@ _TOLERANCE_MAP = {
 }
 
 
+def max_pool_output_shape_pt(input_shape, kernel_size, stride, padding, ceil_mode, dtype=torch.float32):
+    # Create a dummy tensor to get PyTorch的output shape
+    dummy = torch.zeros(input_shape, dtype=dtype)
+    ndim = len(input_shape) - 2
+    if ndim == 1:
+        out = F.max_pool1d(dummy, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode)
+    elif ndim == 2:
+        out = F.max_pool2d(dummy, kernel_size, stride, padding, ceil_mode=ceil_mode)
+    elif ndim == 3:
+        out = F.max_pool3d(dummy, kernel_size, stride, padding, ceil_mode=ceil_mode)
+    else:
+        raise ValueError("Unsupported ndim")
+    return tuple(out.shape)
+
+
 def max_pool_backward(
     input_tensor,
     grad_output_tensor,
@@ -107,31 +122,6 @@ def max_pool_backward(
     grad_input_tensor.copy_(input_tensor.grad)
 
 
-def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
-    """
-    Infer the output shape for max pooling operation
-    """
-
-    def calc_output_size(input_size, kernel_size, stride, padding, ceil_mode):
-        if ceil_mode:
-            return math.ceil((input_size + 2 * padding - kernel_size) / stride + 1)
-        else:
-            return math.floor((input_size + 2 * padding - kernel_size) / stride + 1)
-
-    batch_size = input_shape[0]
-    channels = input_shape[1]
-    spatial_dims = input_shape[2:]
-
-    output_spatial = []
-    for i, dim_size in enumerate(spatial_dims):
-        output_size = calc_output_size(
-            dim_size, kernel_size[i], stride[i], padding[i], ceil_mode
-        )
-        output_spatial.append(output_size)
-
-    return (batch_size, channels) + tuple(output_spatial)
-
-
 def tuple_to_void_p(py_tuple: Tuple):
     """Convert a python tuple to a ctype void pointer"""
     array = ctypes.c_uint64 * len(py_tuple)
@@ -156,9 +146,10 @@ def test(
         input_shape, input_stride, dt=tensor_dtype, device=device, scale=1.0
     )
 
-    # Infer output shape for grad_output
-    output_shape = infer_output_shape(
-        input_shape, kernel_size, stride, padding, ceil_mode
+    # 用PyTorch得出的output shape来初始化grad_output_tensor
+    torch_dtype = torch.float32  # 只用于推理shape，实际TestTensor用自己的dtype
+    output_shape = max_pool_output_shape_pt(
+        input_shape, kernel_size, stride, padding, ceil_mode, dtype=torch_dtype
     )
 
     # Create grad_output tensor (gradient w.r.t. pooling output)

@@ -102,23 +102,6 @@ std::shared_ptr<Test> Test::build(
         }
     }
 
-    // 调试信息
-    std::cout << "DEBUG[BWD] pool_ndim = " << pool_ndim << "\n";
-    auto print_vec = [](const char *name, const std::vector<size_t> &v) {
-        std::cout << "  " << name << ": [";
-        for (size_t i = 0; i < v.size(); ++i) {
-            if (i) {
-                std::cout << ", ";
-            }
-            std::cout << v[i];
-        }
-        std::cout << "]\n";
-    };
-    print_vec("kernel_size", test->_attributes->kernel_size);
-    print_vec("stride", test->_attributes->stride);
-    print_vec("padding", test->_attributes->padding);
-    std::cout << "  ceil_mode: " << (test->_attributes->ceil_mode ? "true" : "false") << "\n";
-
     return test;
 }
 
@@ -129,7 +112,7 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     // 把张量放到目标设备
     auto input = _attributes->input->to(device, device_id);             // X
     auto grad_output = _attributes->grad_output->to(device, device_id); // dY
-    auto expected_grad_input = _attributes->expected_grad_input;        // 参考 dX（可在 CPU）
+    auto expected_grad_input = _attributes->expected_grad_input;        // 参考 dX
 
     // 构造实际输出 dX 的张量（形状等于 input，dtype 等于 input）
     const auto &in_shape = input->shape();
@@ -149,34 +132,12 @@ std::shared_ptr<infiniop_test::Result> Test::run(
     auto actual_grad_input = std::make_shared<Tensor>(
         dx_mem, 0, in_shape, in_strides, input->ggml_type());
 
-    // 打印信息
-    auto print_shape = [](const std::vector<size_t> &s) {
-        std::cout << "[";
-        for (size_t i = 0; i < s.size(); ++i) {
-            if (i) {
-                std::cout << ", ";
-            }
-            std::cout << s[i];
-        }
-        std::cout << "]";
-    };
-    std::cout << "DEBUG[BWD] input shape: ";
-    print_shape(input->shape());
-    std::cout << ", dtype: " << input->ggml_type() << "\n";
-    std::cout << "DEBUG[BWD] grad_output shape: ";
-    print_shape(grad_output->shape());
-    std::cout << "\n";
-    std::cout << "DEBUG[BWD] expected_grad_input shape: ";
-    print_shape(expected_grad_input->shape());
-    std::cout << "\n";
-
     // 参数指针
     void *kernel_size_ptr = _attributes->kernel_size.data();
     void *stride_ptr = _attributes->stride.data();
     void *padding_ptr = _attributes->padding.data();
 
     // --- 创建反向算子描述符 ---
-    std::cout << "DEBUG[BWD] Creating avg pool backward descriptor...\n";
     infiniopAvgPoolBackwardDescriptor_t bwd_desc;
     CHECK_OR(infiniopCreateAvgPoolBackwardDescriptor(
                  handle, &bwd_desc,

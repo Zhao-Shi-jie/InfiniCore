@@ -34,6 +34,7 @@ _TEST_CASES = [
     # 1D max pooling cases
     ((1, 3, 8), None, (2,), (2,), (0,), False),
     ((2, 4, 16), None, (3,), (2,), (1,), False),
+    ((3, 2, 77), None, (6,), (4,), (3,), True),
     # 2D max pooling cases
     ((1, 1, 4, 4), None, (2, 2), (2, 2), (0, 0), False),
     ((2, 3, 8, 8), None, (3, 3), (2, 2), (1, 1), False),
@@ -58,7 +59,7 @@ _TOLERANCE_MAP = {
 }
 
 
-def max_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tensor):
+def max_pool(input_tensor, kernel_size, stride, padding, ceil_mode):
     """
     Perform max pooling using PyTorch as reference
     """
@@ -91,32 +92,7 @@ def max_pool(input_tensor, kernel_size, stride, padding, ceil_mode, output_tenso
     else:
         raise ValueError(f"Unsupported spatial dimensions: {ndim}")
 
-    output_tensor.copy_(result)
-
-
-def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
-    """
-    Infer the output shape for max pooling operation
-    """
-
-    def calc_output_size(input_size, kernel_size, stride, padding, ceil_mode):
-        if ceil_mode:
-            return math.ceil((input_size + 2 * padding - kernel_size) / stride + 1)
-        else:
-            return math.floor((input_size + 2 * padding - kernel_size) / stride + 1)
-
-    batch_size = input_shape[0]
-    channels = input_shape[1]
-    spatial_dims = input_shape[2:]
-
-    output_spatial = []
-    for i, dim_size in enumerate(spatial_dims):
-        output_size = calc_output_size(
-            dim_size, kernel_size[i], stride[i], padding[i], ceil_mode
-        )
-        output_spatial.append(output_size)
-
-    return (batch_size, channels) + tuple(output_spatial)
+    return result
 
 
 def tuple_to_void_p(py_tuple: Tuple):
@@ -143,27 +119,25 @@ def test(
         input_shape, input_stride, dt=tensor_dtype, device=device, scale=1.0
     )
 
-    # Infer output shape
-    output_shape = infer_output_shape(
-        input_shape, kernel_size, stride, padding, ceil_mode
+    # Compute reference result using PyTorch
+    torch_ref_output = max_pool(
+        input_tensor.torch_tensor(),
+        kernel_size,
+        stride,
+        padding,
+        ceil_mode,
     )
-    output_tensor = TestTensor(output_shape, None, dt=tensor_dtype, device=device)
+
+    # Use PyTorch输出shape来初始化output_tensor
+    output_tensor = TestTensor(
+        torch_ref_output.shape, None, dt=tensor_dtype, device=device
+    )
 
     print(
         f"Testing MaxPool on {InfiniDeviceNames[device]} with "
         f"input_shape: {input_shape}, kernel_size: {kernel_size}, "
         f"stride: {stride}, padding: {padding}, ceil_mode: {ceil_mode}, "
         f"dtype: {InfiniDtypeNames[tensor_dtype]}"
-    )
-
-    # Compute reference result using PyTorch
-    max_pool(
-        input_tensor.torch_tensor(),
-        kernel_size,
-        stride,
-        padding,
-        ceil_mode,
-        output_tensor.torch_tensor(),
     )
 
     if sync is not None:
@@ -218,14 +192,14 @@ def test(
     if DEBUG:
         debug(
             output_tensor.actual_tensor(),
-            output_tensor.torch_tensor(),
+            torch_ref_output,
             atol=atol,
             rtol=rtol,
         )
 
     assert torch.allclose(
         output_tensor.actual_tensor(),
-        output_tensor.torch_tensor(),
+        torch_ref_output,
         atol=atol,
         rtol=rtol,
     ), f"Results don't match for input_shape {input_shape}, kernel_size {kernel_size}"
@@ -240,7 +214,6 @@ def test(
                 stride,
                 padding,
                 ceil_mode,
-                output_tensor.torch_tensor(),
             ),
             device,
             NUM_PRERUN,
