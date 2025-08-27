@@ -159,39 +159,44 @@ def test(
     grad_output_torch = torch.randn(
         output_shape, dtype=input_torch.dtype, device=input_torch.device
     )
+    
+    # Define forward function for reuse
+    def forward_pass(input_t, weight_t, bias_t):
+        if len(input_shape) == 3:
+            return torch.nn.functional.conv1d(
+                input_t,
+                weight_t,
+                bias=bias_t,
+                stride=strides,
+                padding=pads,
+                dilation=dilations,
+                groups=groups,
+            )
+        elif len(input_shape) == 4:
+            return torch.nn.functional.conv2d(
+                input_t,
+                weight_t,
+                bias=bias_t,
+                stride=strides,
+                padding=pads,
+                dilation=dilations,
+                groups=groups,
+            )
+        elif len(input_shape) == 5:
+            return torch.nn.functional.conv3d(
+                input_t,
+                weight_t,
+                bias=bias_t,
+                stride=strides,
+                padding=pads,
+                dilation=dilations,
+                groups=groups,
+            )
+        else:
+            raise NotImplementedError("Unsupported ndim")
+    
     # Forward
-    if len(input_shape) == 3:
-        y_ref = torch.nn.functional.conv1d(
-            input_torch,
-            weight_torch,
-            bias=bias_torch,
-            stride=strides,
-            padding=pads,
-            dilation=dilations,
-            groups=groups,
-        )
-    elif len(input_shape) == 4:
-        y_ref = torch.nn.functional.conv2d(
-            input_torch,
-            weight_torch,
-            bias=bias_torch,
-            stride=strides,
-            padding=pads,
-            dilation=dilations,
-            groups=groups,
-        )
-    elif len(input_shape) == 5:
-        y_ref = torch.nn.functional.conv3d(
-            input_torch,
-            weight_torch,
-            bias=bias_torch,
-            stride=strides,
-            padding=pads,
-            dilation=dilations,
-            groups=groups,
-        )
-    else:
-        raise NotImplementedError("Unsupported ndim")
+    y_ref = forward_pass(input_torch, weight_torch, bias_torch)
     print(
         f"PyTorch output shape: {y_ref.shape}, dtype: {y_ref.dtype}, device: {y_ref.device}"
     )
@@ -290,16 +295,26 @@ def test(
         )
 
     if PROFILE:
-        profile_operation(
-            "PyTorch",
-            lambda: y_ref.backward(grad_output_torch),
-            device,
-            NUM_PRERUN,
-            NUM_ITERATIONS,
-        )
-        profile_operation(
-            "    lib", lambda: lib_conv_backward(), device, NUM_PRERUN, NUM_ITERATIONS
-        )
+        # PyTorch backward function that recreates the computation graph each time
+        def torch_conv_backward():
+            # Recreate tensors with gradients for each call
+            input_t = input.torch_tensor().detach().clone().requires_grad_(True)
+            weight_t = weight.torch_tensor().detach().clone().requires_grad_(True)
+            bias_t = (
+                bias.torch_tensor().detach().clone().requires_grad_(True)
+                if bias is not None
+                else None
+            )
+            # Forward pass
+            y = forward_pass(input_t, weight_t, bias_t)
+            # Backward pass
+            y.backward(grad_output_torch)
+        
+        # fmt: off
+        profile_operation("PyTorch", torch_conv_backward, device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("    lib", lib_conv_backward, device, NUM_PRERUN, NUM_ITERATIONS)
+        # fmt: on
+        
     check_error(LIBINFINIOP.infiniopDestroyConvBackwardDescriptor(descriptor))
 
 

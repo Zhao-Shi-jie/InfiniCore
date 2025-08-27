@@ -12,6 +12,7 @@ from libinfiniop import (
     get_args,
     debug,
     get_tolerance,
+    profile_operation,
     infiniopOperatorDescriptor_t,
     InfiniDtype,
     InfiniDtypeNames,
@@ -48,6 +49,8 @@ _TOLERANCE_MAP = {
 }
 DEBUG = False
 PROFILE = False
+NUM_PRERUN = 10
+NUM_ITERATIONS = 1000
 
 
 def cross_entropy_loss_pytorch(logits, target):
@@ -120,7 +123,11 @@ def test(
         )
     )
 
-    # 获取工作空间大小并执行
+    # 销毁tensor的描述符以防止内核直接使用
+    for tensor in [logits, target, loss]:
+        tensor.destroy_desc()
+
+    # 获取工作空间大小并创建工作空间
     workspace_size = c_uint64(0)
     check_error(
         LIBINFINIOP.infiniopGetCrossEntropyLossWorkspaceSize(
@@ -128,17 +135,34 @@ def test(
         )
     )
     workspace = TestWorkspace(workspace_size.value, device)
-    check_error(
-        LIBINFINIOP.infiniopCrossEntropyLoss(
-            descriptor,
-            workspace.data(),
-            workspace_size.value,
-            loss.data(),
-            logits.data(),
-            target.data(),
-            None,
+
+    # PyTorch参考实现函数
+    def torch_cross_entropy():
+        if len(input_shape) == 1:
+            target_scalar = target.torch_tensor()[0]
+            result = cross_entropy_loss_pytorch(logits.torch_tensor(), target_scalar)
+        else:
+            result = cross_entropy_loss_pytorch(
+                logits.torch_tensor(), target.torch_tensor()
+            )
+        loss.torch_tensor()[0] = result.to(loss.torch_tensor().dtype)
+
+    # InfiniOP实现函数
+    def lib_cross_entropy():
+        check_error(
+            LIBINFINIOP.infiniopCrossEntropyLoss(
+                descriptor,
+                workspace.data(),
+                workspace_size.value,
+                loss.data(),
+                logits.data(),
+                target.data(),
+                None,
+            )
         )
-    )
+
+    # 执行InfiniOP算子
+    lib_cross_entropy()
 
     if sync:
         sync()
@@ -157,6 +181,7 @@ def test(
             )
         else:
             print(f"Target (scalar): {target.torch_tensor()[0].item()}")
+        debug(actual_loss, expected_loss, atol=atol, rtol=rtol)
 
     if not torch.allclose(actual_loss, expected_loss, atol=atol, rtol=rtol):
         print("--- ERROR ANALYSIS ---")
@@ -165,6 +190,14 @@ def test(
         print(f"Tolerance: atol={atol}, rtol={rtol}")
 
     assert torch.allclose(actual_loss, expected_loss, atol=atol, rtol=rtol)
+
+    # Profile功能
+    if PROFILE:
+        # fmt: off
+        profile_operation("PyTorch", lambda: torch_cross_entropy(), device, NUM_PRERUN, NUM_ITERATIONS)
+        profile_operation("    lib", lambda: lib_cross_entropy(), device, NUM_PRERUN, NUM_ITERATIONS)
+        # fmt: on
+
     check_error(LIBINFINIOP.infiniopDestroyCrossEntropyLossDescriptor(descriptor))
 
 
@@ -172,6 +205,9 @@ if __name__ == "__main__":
     args = get_args()
     DEBUG = args.debug
     PROFILE = args.profile
+    NUM_PRERUN = args.num_prerun
+    NUM_ITERATIONS = args.num_iterations
+    
     for device in get_test_devices(args):
         test_operator(device, test, _TEST_CASES, _TENSOR_DTYPES)
     print("\033[92mAll CrossEntropyLoss tests passed!\033[0m")
