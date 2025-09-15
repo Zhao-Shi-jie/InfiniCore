@@ -2,6 +2,9 @@
 #include "../../handle.h"
 #include "infiniop/ops/conv_backward.h"
 
+#ifdef ENABLE_CPU_API
+#include "cpu/conv_backward_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/conv_backward_nvidia.cuh"
 #endif
@@ -27,6 +30,9 @@ __C infiniStatus_t infiniopCreateConvBackwardDescriptor(
             grad_output_desc, input_desc, weight_desc, bias_desc, pads, strides, dilations, groups)
 
     switch (handle->device) {
+#ifdef ENABLE_CPU_API
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -50,6 +56,9 @@ __C infiniStatus_t infiniopGetConvBackwardWorkspaceSize(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        GET(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -82,6 +91,9 @@ __C infiniStatus_t infiniopConvBackward(
             ->calculate(workspace, workspace_size, grad_input, grad_weight, grad_bias, grad_output, input, weight, stream)
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -104,6 +116,9 @@ __C infiniStatus_t infiniopDestroyConvBackwardDescriptor(infiniopConvBackwardDes
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
