@@ -2,6 +2,9 @@
 #include "../../handle.h"
 #include "infiniop/ops/maxpool_backward.h"
 
+#ifdef ENABLE_CPU_API
+#include "cpu/maxpool_backward_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/maxpool_backward_nvidia.cuh"
 #endif
@@ -35,6 +38,9 @@ __C infiniStatus_t infiniopCreateMaxPoolBackwardDescriptor(
 
     switch (handle->device) {
 
+#ifdef ENABLE_CPU_API
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -63,6 +69,9 @@ __C infiniStatus_t infiniopGetMaxPoolBackwardWorkspaceSize(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        GET(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -100,6 +109,9 @@ __C infiniStatus_t infiniopMaxPoolBackward(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -126,6 +138,9 @@ __C infiniStatus_t infiniopDestroyMaxPoolBackwardDescriptor(infiniopMaxPoolBackw
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif

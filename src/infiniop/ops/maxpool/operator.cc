@@ -2,6 +2,9 @@
 #include "../../handle.h"
 #include "infiniop/ops/maxpool.h"
 
+#ifdef ENABLE_CPU_API
+#include "cpu/maxpool_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/maxpool_nvidia.cuh"
 #endif
@@ -33,6 +36,9 @@ __C infiniStatus_t infiniopCreateMaxPoolDescriptor(
 
     switch (handle->device) {
 
+#ifdef ENABLE_CPU_API
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -61,6 +67,9 @@ __C infiniStatus_t infiniopGetMaxPoolWorkspaceSize(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        GET(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -96,6 +105,9 @@ __C infiniStatus_t infiniopMaxPool(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -122,6 +134,9 @@ __C infiniStatus_t infiniopDestroyMaxPoolDescriptor(infiniopMaxPoolDescriptor_t 
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif

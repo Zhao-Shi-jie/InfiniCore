@@ -2,6 +2,9 @@
 #include "../../handle.h"
 #include "infiniop/ops/interpolate_nearest.h"
 
+#ifdef ENABLE_CPU_API
+#include "cpu/interpolate_nearest_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/interpolate_nearest_nvidia.cuh"
 #endif
@@ -25,6 +28,9 @@ __C infiniStatus_t infiniopCreateInterpolateNearestDescriptor(
 
     switch (handle->device) {
 
+#ifdef ENABLE_CPU_API
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -52,6 +58,10 @@ __C infiniStatus_t infiniopGetInterpolateNearestWorkspaceSize(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
+
+#ifdef ENABLE_CPU_API
+        GET(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -84,6 +94,9 @@ __C infiniStatus_t infiniopInterpolateNearest(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -111,6 +124,9 @@ __C infiniStatus_t infiniopDestroyInterpolateNearestDescriptor(
 
     switch (desc->device_type) {
 
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
