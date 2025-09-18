@@ -8,6 +8,9 @@
 #ifdef ENABLE_METAX_API
 #include "metax/averagepool_metax.h"
 #endif
+#ifdef ENABLE_CPU_API 
+#include "cpu/averagepool_cpu.h"
+#endif
 
 __C infiniStatus_t infiniopCreateAvgPoolDescriptor(
     infiniopHandle_t handle,
@@ -42,6 +45,9 @@ __C infiniStatus_t infiniopCreateAvgPoolDescriptor(
 #ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
 #endif
+#ifdef ENABLE_CPU_API 
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -69,6 +75,9 @@ __C infiniStatus_t infiniopGetAvgPoolWorkspaceSize(
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
+#endif
+#ifdef ENABLE_CPU_API 
+        GET(INFINI_DEVICE_CPU, cpu);
 #endif
 
     default:
@@ -105,6 +114,9 @@ __C infiniStatus_t infiniopAvgPool(
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
 #endif
+#ifdef ENABLE_CPU_API 
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -130,6 +142,9 @@ __C infiniStatus_t infiniopDestroyAvgPoolDescriptor(infiniopAvgPoolDescriptor_t 
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
+#endif
+#ifdef ENABLE_CPU_API 
+        DELETE(INFINI_DEVICE_CPU, cpu);
 #endif
 
     default:
