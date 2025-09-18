@@ -74,19 +74,21 @@ def averagepool(input_tensor, kernel_size, stride, padding, ceil_mode, output_te
     ndim = len(input_tensor.shape) - 2
     if ndim == 1:
         result = F.avg_pool1d(
-            input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode
+            input_tensor.to(torch.float32), kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode
         )
     elif ndim == 2:
         result = F.avg_pool2d(
-            input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode
+            input_tensor.to(torch.float32), kernel_size, stride, padding, ceil_mode=ceil_mode
         )
     elif ndim == 3:
         result = F.avg_pool3d(
-            input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode
+            input_tensor.to(torch.float32), kernel_size, stride, padding, ceil_mode=ceil_mode
         )
     else:
         raise ValueError(f"Unsupported spatial dimensions: {ndim}")
-    output_tensor.copy_(result)
+    
+    # 将计算结果转换回原始数据类型
+    output_tensor.copy_(result.to(output_tensor.dtype))
 
 
 def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
@@ -218,7 +220,7 @@ def test(
             NUM_ITERATIONS,
         )
         profile_operation(
-            "    lib", lib_averagepool, device, NUM_PRERUN, NUM_ITERATIONS
+            "   lib", lib_averagepool, device, NUM_PRERUN, NUM_ITERATIONS
         )
 
     check_error(LIBINFINIOP.infiniopDestroyAvgPoolDescriptor(descriptor))

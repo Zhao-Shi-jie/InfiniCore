@@ -2,6 +2,9 @@
 #include "../../handle.h"
 #include "infiniop/ops/averagepool_backward.h"
 
+#ifdef ENABLE_CPU_API 
+#include "cpu/averagepool_backward_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/averagepool_backward_nvidia.cuh"
 #endif
@@ -44,6 +47,9 @@ __C infiniStatus_t infiniopCreateAvgPoolBackwardDescriptor(
 #ifdef ENABLE_METAX_API
         CREATE(INFINI_DEVICE_METAX, metax);
 #endif
+#ifdef ENABLE_CPU_API 
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -71,6 +77,9 @@ __C infiniStatus_t infiniopGetAvgPoolBackwardWorkspaceSize(
 #endif
 #ifdef ENABLE_METAX_API
         GET(INFINI_DEVICE_METAX, metax);
+#endif
+#ifdef ENABLE_CPU_API 
+        GET(INFINI_DEVICE_CPU, cpu);
 #endif
 
     default:
@@ -109,6 +118,9 @@ __C infiniStatus_t infiniopAvgPoolBackward(
 #ifdef ENABLE_METAX_API
         CALCULATE(INFINI_DEVICE_METAX, metax);
 #endif
+#ifdef ENABLE_CPU_API 
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 
     default:
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
@@ -134,6 +146,9 @@ __C infiniStatus_t infiniopDestroyAvgPoolBackwardDescriptor(infiniopAvgPoolBackw
 #endif
 #ifdef ENABLE_METAX_API
         DELETE(INFINI_DEVICE_METAX, metax);
+#endif
+#ifdef ENABLE_CPU_API 
+        DELETE(INFINI_DEVICE_CPU, cpu);
 #endif
 
     default:
