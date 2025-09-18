@@ -2,10 +2,12 @@
 #include "../../handle.h"
 #include "infiniop/ops/cross_entropy_loss.h"
 
+#ifdef ENABLE_CPU_API
+#include "cpu/cross_entropy_loss_cpu.h"
+#endif
 #if defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API)
 #include "nvidia/cross_entropy_loss_nvidia.cuh"
 #endif
-
 #ifdef ENABLE_METAX_API
 #include "metax/cross_entropy_metax.h"
 #endif
@@ -26,6 +28,9 @@ __C infiniStatus_t infiniopCreateCrossEntropyLossDescriptor(
             loss_desc, logits_desc, target_desc)
 
     switch (handle->device) {
+#ifdef ENABLE_CPU_API
+        CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -53,6 +58,9 @@ __C infiniStatus_t infiniopGetCrossEntropyLossWorkspaceSize(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        GET(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -86,6 +94,9 @@ __C infiniStatus_t infiniopCrossEntropyLoss(
                         stream)
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        CALCULATE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -112,6 +123,9 @@ __C infiniStatus_t infiniopDestroyCrossEntropyLossDescriptor(
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
+#ifdef ENABLE_CPU_API
+        DELETE(INFINI_DEVICE_CPU, cpu);
+#endif
 #ifdef ENABLE_NVIDIA_API
         DELETE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
