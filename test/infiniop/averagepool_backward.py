@@ -79,24 +79,29 @@ def averagepool_backward(
     ceil_mode,
     grad_input_tensor,
 ):
-    input_tensor = input_tensor.detach().clone().requires_grad_(True)
+    input_tensor_f32 = input_tensor.to(torch.float32).detach().clone().requires_grad_(True)
+    grad_output_tensor_f32 = grad_output_tensor.to(torch.float32)
+
     ndim = len(input_tensor.shape) - 2
     if ndim == 1:
         output = F.avg_pool1d(
-            input_tensor, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode
+            input_tensor_f32, kernel_size[0], stride[0], padding[0], ceil_mode=ceil_mode
         )
     elif ndim == 2:
         output = F.avg_pool2d(
-            input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode
+            input_tensor_f32, kernel_size, stride, padding, ceil_mode=ceil_mode
         )
     elif ndim == 3:
         output = F.avg_pool3d(
-            input_tensor, kernel_size, stride, padding, ceil_mode=ceil_mode
+            input_tensor_f32, kernel_size, stride, padding, ceil_mode=ceil_mode
         )
     else:
         raise ValueError("Unsupported dimension")
-    output.backward(grad_output_tensor)
-    grad_input_tensor.copy_(input_tensor.grad)
+    
+    output.backward(grad_output_tensor_f32)
+    
+    # 将计算得到的梯度转换回原始数据类型，并复制到梯度输入张量中
+    grad_input_tensor.copy_(input_tensor_f32.grad.to(grad_input_tensor.dtype))
 
 
 def infer_output_shape(input_shape, kernel_size, stride, padding, ceil_mode):
