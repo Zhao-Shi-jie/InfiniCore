@@ -69,7 +69,7 @@ infiniStatus_t calculateRoPE(const RoPEInfo &info,
                              const Tindex *pos_ids,
                              const Tdata *sin_table,
                              const Tdata *cos_table,
-                             hcStream_t stream) {
+                             mcStream_t stream) {
     auto dimx = uint32_t(info.seqlen),
          dimy = uint32_t(info.nhead);
     int nthreads = std::max(int(info.table_dim), block_size);
@@ -96,7 +96,7 @@ infiniStatus_t calculateRoPE(const RoPEInfo &info,
                   (const TINDEX *)pos_ids,                 \
                   (const TDATA *)sin_table,                \
                   (const TDATA *)cos_table,                \
-                  (hcStream_t)stream)
+                  (mcStream_t)stream)
 
 #define ROPE_TYPE(TDATA)                        \
     switch (_info.pos_type) {                   \

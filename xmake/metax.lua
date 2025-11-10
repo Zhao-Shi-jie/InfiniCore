@@ -2,7 +2,7 @@
 local MACA_ROOT = os.getenv("MACA_PATH") or os.getenv("MACA_HOME") or os.getenv("MACA_ROOT")
 add_includedirs(MACA_ROOT .. "/include")
 add_linkdirs(MACA_ROOT .. "/lib")
-add_links("hcdnn", "hcblas", "hcruntime")
+add_links("mcdnn", "mcblas", "hcruntime")
 
 rule("maca")
     set_extensions(".maca")
@@ -17,7 +17,7 @@ rule("maca")
         local htcc = path.join(MACA_ROOT, "htgpu_llvm/bin/htcc")
         local includedirs = table.concat(target:get("includedirs"), " ")
 
-        local args = { "-x", "hpcc", "-c", sourcefile, "-o", objectfile, "-I" .. MACA_ROOT .. "/include", "-O3", "-fPIC", "-Werror", "-std=c++17"}
+        local args = {"-c", sourcefile, "-o", objectfile, "-I" .. MACA_ROOT .. "/include", "-O3", "-fPIC", "-Werror", "-std=c++17"}
 
         for _, includedir in ipairs(target:get("includedirs")) do
             table.insert(args, "-I" .. includedir)

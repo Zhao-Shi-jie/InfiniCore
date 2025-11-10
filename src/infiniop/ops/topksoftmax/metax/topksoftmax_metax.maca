@@ -42,7 +42,7 @@ infiniStatus_t Descriptor::create(
 namespace {
 
 template <int BLOCK_SIZE = 128>
-infiniStatus_t launch_topksoftmax(float *d_values_out, int *d_indices_out, const void *d_input, const size_t N, const size_t width, const size_t topk, const bool norm, infiniDtype_t xtype, hcStream_t stream) {
+infiniStatus_t launch_topksoftmax(float *d_values_out, int *d_indices_out, const void *d_input, const size_t N, const size_t width, const size_t topk, const bool norm, infiniDtype_t xtype, mcStream_t stream) {
     const int block_threads = BLOCK_SIZE;
     dim3 blocks(static_cast<unsigned int>(N));
     dim3 threads(block_threads);
@@ -52,7 +52,7 @@ infiniStatus_t launch_topksoftmax(float *d_values_out, int *d_indices_out, const
     } else if (xtype == INFINI_DTYPE_F16) {
         softmax_topk_row_kernel<half, BLOCK_SIZE><<<blocks, threads, 0, stream>>>(d_values_out, d_indices_out, (half *)d_input, N, width, topk, norm);
     } else if (xtype == INFINI_DTYPE_BF16) {
-        softmax_topk_row_kernel<__hpcc_bfloat16, BLOCK_SIZE><<<blocks, threads, 0, stream>>>(d_values_out, d_indices_out, (__hpcc_bfloat16 *)d_input, N, width, topk, norm);
+        softmax_topk_row_kernel<__maca_bfloat16, BLOCK_SIZE><<<blocks, threads, 0, stream>>>(d_values_out, d_indices_out, (__maca_bfloat16 *)d_input, N, width, topk, norm);
     } else {
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
@@ -77,7 +77,7 @@ infiniStatus_t Descriptor::calculate(
 
     size_t N = _info.N;
     size_t width = _info.width;
-    auto stream = reinterpret_cast<hcStream_t>(stream_);
+    auto stream = reinterpret_cast<mcStream_t>(stream_);
     if (width <= 128) {
         launch_topksoftmax<128>(values, indices, x, N, width, topk, norm, _info.xtype, stream);
     } else if (width <= 256) {

@@ -45,7 +45,7 @@ infiniStatus_t launchKernel(void *y, const void *x, infiniDtype_t dtype,
                             size_t batch_size, size_t seq_len, size_t total_seq_len,
                             ptrdiff_t y_stride_b, ptrdiff_t y_stride_i,
                             ptrdiff_t x_stride_b, ptrdiff_t x_stride_i,
-                            hcStream_t stream) {
+                            mcStream_t stream) {
     dim3 grid(uint32_t(seq_len), uint32_t(batch_size), 1);
     if (dtype == INFINI_DTYPE_F16) {
         causalSoftmax<BLOCK_SIZE, half, float>
@@ -54,8 +54,8 @@ infiniStatus_t launchKernel(void *y, const void *x, infiniDtype_t dtype,
                                               y_stride_b, y_stride_i,
                                               x_stride_b, x_stride_i);
     } else if (dtype == INFINI_DTYPE_BF16) {
-        causalSoftmax<BLOCK_SIZE, __hpcc_bfloat16, float>
-            <<<grid, BLOCK_SIZE, 0, stream>>>((__hpcc_bfloat16 *)y, (const __hpcc_bfloat16 *)x,
+        causalSoftmax<BLOCK_SIZE, __maca_bfloat16, float>
+            <<<grid, BLOCK_SIZE, 0, stream>>>((__maca_bfloat16 *)y, (const __maca_bfloat16 *)x,
                                               batch_size, seq_len, total_seq_len,
                                               y_stride_b, y_stride_i,
                                               x_stride_b, x_stride_i);
@@ -75,7 +75,7 @@ infiniStatus_t Descriptor::calculate(void *workspace, size_t workspace_size,
                                      void *y,
                                      const void *x,
                                      void *stream_) const {
-    hcStream_t stream = (hcStream_t)stream_;
+    mcStream_t stream = (mcStream_t)stream_;
     if (_opaque->internal->maxThreadsPerBlock() == METAX_BLOCK_SIZE_1024) {
         CHECK_STATUS(launchKernel<METAX_BLOCK_SIZE_1024>(
             y, x, _info.dtype, _info.batch_size, _info.seq_len, _info.total_seq_len,

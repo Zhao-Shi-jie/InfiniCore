@@ -110,7 +110,7 @@ struct DeviceImpl::Opaque {
                                  void *workspace,
                                  void *output,
                                  const std::vector<const void *> &inputs,
-                                 hcStream_t stream,
+                                 mcStream_t stream,
                                  Args &&...args) {
         return launchElementwiseKernel<BLOCK_SIZE, N>(
             info, workspace,
@@ -126,7 +126,7 @@ struct DeviceImpl::Opaque {
                                  void *workspace,
                                  void *output,
                                  const std::vector<const void *> &inputs,
-                                 hcStream_t stream,
+                                 mcStream_t stream,
                                  Args &&...args) {
         return launchElementwiseKernel<BLOCK_SIZE, N>(
             info, workspace,
@@ -148,7 +148,7 @@ private:
         const ptrdiff_t *&d_output_strides,
         const size_t *&d_input_shapes,
         const ptrdiff_t *&d_input_strides,
-        hcStream_t stream) const {
+        mcStream_t stream) const {
 
         constexpr auto input_size = N;
         const auto ndim = info.getNdim();
@@ -179,7 +179,7 @@ private:
         Tout *output,
         const std::vector<const void *> &inputs,
         KernelFunc kernel_func,
-        hcStream_t stream,
+        mcStream_t stream,
         Args &&...args) {
 
         auto output_size = info.getOutputSize();
@@ -238,7 +238,7 @@ infiniStatus_t DeviceImpl::calculate(const op::elementwise::ElementwiseInfo &inf
     static_assert(sizeof...(Tin) == N, "Input type count mismatch");
     return _opaque->calculateImpl<BLOCK_SIZE, N, Op, Tout, Tin...>(
         info, workspace, output, inputs,
-        reinterpret_cast<hcStream_t>(stream),
+        reinterpret_cast<mcStream_t>(stream),
         std::forward<Args>(args)...);
 }
 
@@ -253,7 +253,7 @@ infiniStatus_t DeviceImpl::calculate(const op::elementwise::ElementwiseInfo &inf
     constexpr size_t N = Op::num_inputs;
     return _opaque->calculateImpl<BLOCK_SIZE, N, Op, Tdata>(
         info, workspace, output, inputs,
-        reinterpret_cast<hcStream_t>(stream),
+        reinterpret_cast<mcStream_t>(stream),
         std::forward<Args>(args)...);
 }
 

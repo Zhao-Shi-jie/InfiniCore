@@ -373,7 +373,7 @@ infiniStatus_t launchKernel(
     size_t grid_size,
     const RearrangeParams &params,
     size_t unit_size,
-    hcStream_t stream) {
+    mcStream_t stream) {
 
     // 获取内核函数
     RearrangeParams params_copy = params; // 创建一个非const副本
@@ -420,7 +420,7 @@ infiniStatus_t launchKernel(
                         kernel_func,
                         grid_size, BLOCK_SIZE,
                         args, 0, stream)
-                        == hcSuccess,
+                        == mcSuccess,
                     INFINI_STATUS_INTERNAL_ERROR);
 
     return INFINI_STATUS_SUCCESS;
@@ -431,16 +431,16 @@ infiniStatus_t Descriptor::calculate(
     const void *x,
     void *stream_) const {
 
-    auto stream = reinterpret_cast<hcStream_t>(stream_);
+    auto stream = reinterpret_cast<mcStream_t>(stream_);
 
     // 如果没有维度，直接进行内存拷贝
     if (_meta.ndim() == 0) {
         auto err = hcMemcpyAsync(y, x, _meta.unit(), hcMemcpyDeviceToDevice, stream);
-        if (err != hcSuccess) {
+        if (err != mcSuccess) {
             return INFINI_STATUS_INTERNAL_ERROR;
         }
 
-        CHECK_OR_RETURN(hcMemcpyAsync(y, x, _meta.unit(), hcMemcpyDeviceToDevice, stream) == hcSuccess,
+        CHECK_OR_RETURN(hcMemcpyAsync(y, x, _meta.unit(), hcMemcpyDeviceToDevice, stream) == mcSuccess,
                         INFINI_STATUS_INTERNAL_ERROR);
         return INFINI_STATUS_SUCCESS;
     }

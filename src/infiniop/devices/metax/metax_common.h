@@ -1,18 +1,18 @@
 #include "../../../utils.h"
 #include "../pool.h"
 #include "metax_handle.h"
-#include <hcblas/hcblas.h>
-#include <hcdnn/hcdnn.h>
+#include <mcblas/mcblas.h>
+#include <mcdnn/mcdnn.h>
 #include <memory>
 
-#define CHECK_MCBLAS(API) CHECK_INTERNAL(API, HCBLAS_STATUS_SUCCESS)
-#define CHECK_MCDNN(API) CHECK_INTERNAL(API, HCDNN_STATUS_SUCCESS)
+#define CHECK_MCBLAS(API) CHECK_INTERNAL(API, MCBLAS_STATUS_SUCCESS)
+#define CHECK_MCDNN(API) CHECK_INTERNAL(API, MCDNN_STATUS_SUCCESS)
 
 namespace device::metax {
 
 class Handle::Internal {
-    Pool<hcblasHandle_t> mcblas_handles;
-    Pool<hcdnnHandle_t> mcdnn_handles;
+    Pool<mcblasHandle_t> mcblas_handles;
+    Pool<mcdnnHandle_t> mcdnn_handles;
 
     template <typename T>
     using Fn = std::function<infiniStatus_t(T)>;
@@ -24,8 +24,8 @@ class Handle::Internal {
 
 public:
     Internal(int);
-    infiniStatus_t useMcblas(hcStream_t stream, const Fn<hcblasHandle_t> &f) const;
-    infiniStatus_t useMcdnn(hcStream_t stream, const Fn<hcdnnHandle_t> &f) const;
+    infiniStatus_t useMcblas(mcStream_t stream, const Fn<mcblasHandle_t> &f) const;
+    infiniStatus_t useMcdnn(mcStream_t stream, const Fn<mcdnnHandle_t> &f) const;
 
     int warpSize() const;
     int maxThreadsPerBlock() const;
@@ -37,6 +37,6 @@ public:
     int gridSizeZ() const;
 };
 
-hcdnnDataType_t getHcdnnDtype(infiniDtype_t dt);
+mcdnnDataType_t getMcdnnDtype(infiniDtype_t dt);
 
 } // namespace device::metax

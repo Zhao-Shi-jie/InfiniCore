@@ -3,18 +3,18 @@
 #include "../../utils.h"
 
 #include <hccl.h>
-#include <hcr/hc_runtime_api.h>
+#include <mcr/mc_runtime_api.h>
 
 #include <iostream>
 #include <vector>
 
 #define CHECK_HCCL(API__) CHECK_INTERNAL(API__, hcclSuccess)
 
-inline hcStream_t getMacaStream(infinirtStream_t stream) {
+inline mcStream_t getMacaStream(infinirtStream_t stream) {
     if (stream == nullptr) {
         return 0;
     }
-    return static_cast<hcStream_t>(stream);
+    return static_cast<mcStream_t>(stream);
 }
 
 inline hcclDataType_t getHcclDtype(infiniDtype_t datatype) {

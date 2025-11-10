@@ -24,23 +24,23 @@ Handle::Internal::Internal(int device_id) {
     _grid_size[2] = prop.maxGridSize[2];
 }
 
-infiniStatus_t Handle::Internal::useMcblas(hcStream_t stream, const Fn<hcblasHandle_t> &f) const {
+infiniStatus_t Handle::Internal::useMcblas(mcStream_t stream, const Fn<mcblasHandle_t> &f) const {
     auto handle = mcblas_handles.pop();
     if (!handle) {
-        CHECK_MCBLAS(hcblasCreate(&(*handle)));
+        CHECK_MCBLAS(mcblasCreate(&(*handle)));
     }
-    CHECK_MCBLAS(hcblasSetStream(*handle, stream));
+    CHECK_MCBLAS(mcblasSetStream(*handle, stream));
     CHECK_STATUS(f(*handle));
     mcblas_handles.push(std::move(*handle));
     return INFINI_STATUS_SUCCESS;
 }
 
-infiniStatus_t Handle::Internal::useMcdnn(hcStream_t stream, const Fn<hcdnnHandle_t> &f) const {
+infiniStatus_t Handle::Internal::useMcdnn(mcStream_t stream, const Fn<mcdnnHandle_t> &f) const {
     auto handle = mcdnn_handles.pop();
     if (!handle) {
-        CHECK_MCDNN(hcdnnCreate(&(*handle)));
+        CHECK_MCDNN(mcdnnCreate(&(*handle)));
     }
-    CHECK_MCDNN(hcdnnSetStream(*handle, stream));
+    CHECK_MCDNN(mcdnnSetStream(*handle, stream));
     CHECK_STATUS(f(*handle));
     mcdnn_handles.push(std::move(*handle));
     return INFINI_STATUS_SUCCESS;
@@ -55,26 +55,26 @@ int Handle::Internal::gridSizeX() const { return _grid_size[0]; }
 int Handle::Internal::gridSizeY() const { return _grid_size[1]; }
 int Handle::Internal::gridSizeZ() const { return _grid_size[2]; }
 
-hcdnnDataType_t getHcdnnDtype(infiniDtype_t dt) {
+mcdnnDataType_t getMcdnnDtype(infiniDtype_t dt) {
     switch (dt) {
     case INFINI_DTYPE_F16:
-        return HCDNN_DATA_HALF;
+        return MCDNN_DATA_HALF;
     case INFINI_DTYPE_F32:
-        return HCDNN_DATA_FLOAT;
+        return MCDNN_DATA_FLOAT;
     case INFINI_DTYPE_F64:
-        return HCDNN_DATA_DOUBLE;
+        return MCDNN_DATA_DOUBLE;
     case INFINI_DTYPE_BF16:
-        return HCDNN_DATA_BFLOAT16;
+        return MCDNN_DATA_BFLOAT16;
     case INFINI_DTYPE_I8:
-        return HCDNN_DATA_INT8;
+        return MCDNN_DATA_INT8;
     case INFINI_DTYPE_I32:
-        return HCDNN_DATA_INT32;
+        return MCDNN_DATA_INT32;
     case INFINI_DTYPE_I64:
-        return HCDNN_DATA_INT64;
+        return MCDNN_DATA_INT64;
     case INFINI_DTYPE_U8:
-        return HCDNN_DATA_UINT8;
+        return MCDNN_DATA_UINT8;
     default:
-        return HCDNN_DATA_FLOAT;
+        return MCDNN_DATA_FLOAT;
     }
 }
 

@@ -15,7 +15,7 @@ static hcError_t argMax_(
     int n,
     void *workspace_ptr,
     size_t &workspace_len,
-    hcStream_t stream) {
+    mcStream_t stream) {
     return cub::DeviceReduce::ArgMax(
         workspace_ptr, workspace_len,
         logits, kv_pair, n,
@@ -28,7 +28,7 @@ static hcError_t radixSort(
     const Tval *key_in, Tval *key_out,
     const Tidx *val_in, Tidx *val_out,
     int n,
-    hcStream_t stream) {
+    mcStream_t stream) {
     return cub::DeviceRadixSort::SortPairsDescending(
         workspace_ptr, workspace_len,
         key_in, key_out,
@@ -42,7 +42,7 @@ template <class T>
 static hcError_t inclusiveSum(
     void *workspace_ptr, size_t &workspace_len,
     T *data, int n,
-    hcStream_t stream) {
+    mcStream_t stream) {
     return cub::DeviceScan::InclusiveSum(
         workspace_ptr, workspace_len,
         data, data, n,
@@ -109,7 +109,7 @@ struct CudaTval<fp16_t> {
 
 template <>
 struct CudaTval<bf16_t> {
-    using Type = __hpcc_bfloat16;
+    using Type = __maca_bfloat16;
 };
 
 // ↑↑↑ 通过特化将 fp16_t 转换为 half
@@ -184,7 +184,7 @@ struct Algo {
 
         using Tval = typename CudaTval<Tval_>::Type;
 
-        auto stream = (hcStream_t)stream_;
+        auto stream = (mcStream_t)stream_;
         auto logits = (Tval *)probs;
         auto kv_pair = (cub::KeyValuePair<int, Tval> *)workspace;
         workspace = (void *)((char *)workspace + 256);
@@ -210,7 +210,7 @@ struct Algo {
 
         using Tval = typename CudaTval<Tval_>::Type;
 
-        auto stream = (hcStream_t)stream_;
+        auto stream = (mcStream_t)stream_;
         auto logits = (Tval *)probs;
         auto result = (Tidx *)result_;
 

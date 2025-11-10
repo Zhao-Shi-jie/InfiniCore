@@ -43,21 +43,21 @@ infiniStatus_t Descriptor::calculate(
     float alpha,
     void *stream) const {
 
-    hpccDataType a_type, b_type, c_type;
-    hcblasComputeType_t compute_type;
+    mxccDataType a_type, b_type, c_type;
+    mcblasComputeType_t compute_type;
 
     switch (_dtype) {
     case INFINI_DTYPE_F16:
-        a_type = b_type = c_type = HPCC_R_16F;
-        compute_type = HCBLAS_COMPUTE_32F;
+        a_type = b_type = c_type = MACA_R_16F;
+        compute_type = MCBLAS_COMPUTE_32F;
         break;
     case INFINI_DTYPE_BF16:
-        a_type = b_type = c_type = HPCC_R_16BF;
-        compute_type = HCBLAS_COMPUTE_32F;
+        a_type = b_type = c_type = MACA_R_16BF;
+        compute_type = MCBLAS_COMPUTE_32F;
         break;
     case INFINI_DTYPE_F32:
-        a_type = b_type = c_type = HPCC_R_32F;
-        compute_type = HCBLAS_COMPUTE_32F_FAST_TF32;
+        a_type = b_type = c_type = MACA_R_32F;
+        compute_type = MCBLAS_COMPUTE_32F_FAST_TF32;
         break;
 
     default:
@@ -68,14 +68,14 @@ infiniStatus_t Descriptor::calculate(
         std::swap(a, b);
     }
 
-    auto op_a = _info.a_matrix.row_stride == 1 ? HCBLAS_OP_N : HCBLAS_OP_T;
-    auto op_b = _info.b_matrix.row_stride == 1 ? HCBLAS_OP_N : HCBLAS_OP_T;
+    auto op_a = _info.a_matrix.row_stride == 1 ? MCBLAS_OP_N : MCBLAS_OP_T;
+    auto op_b = _info.b_matrix.row_stride == 1 ? MCBLAS_OP_N : MCBLAS_OP_T;
 
     CHECK_STATUS(_opaque->internal->useMcblas(
-        (hcStream_t)stream,
-        [&](hcblasHandle_t handle) {
+        (mcStream_t)stream,
+        [&](mcblasHandle_t handle) {
             CHECK_MCBLAS(
-                hcblasGemmStridedBatchedEx(
+                mcblasGemmStridedBatchedEx(
                     handle,
                     op_a,
                     op_b,
@@ -98,7 +98,7 @@ infiniStatus_t Descriptor::calculate(
                     _info.c_matrix.stride,
                     static_cast<int>(_info.batch),
                     compute_type,
-                    HCBLAS_GEMM_DEFAULT_TENSOR_OP));
+                    MCBLAS_GEMM_DEFAULT_TENSOR_OP));
             return INFINI_STATUS_SUCCESS;
         }));
     return INFINI_STATUS_SUCCESS;

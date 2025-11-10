@@ -60,7 +60,7 @@ infiniStatus_t launchKernel(
     const void *x, ptrdiff_t stride_x_batch, ptrdiff_t stride_x_nhead,
     const void *w, infiniDtype_t wtype,
     float epsilon,
-    hcStream_t stream) {
+    mcStream_t stream) {
 
 #define LAUNCH_KERNEL(Tdata, Tweight, Tcompute)                                                 \
     rmsnormKernel<BLOCK_SIZE, Tcompute, Tdata, Tweight><<<batch_size * nhead, BLOCK_SIZE, 0, stream>>>( \
@@ -78,9 +78,9 @@ infiniStatus_t launchKernel(
     if (atype == INFINI_DTYPE_F16 && wtype == INFINI_DTYPE_F16) {
         LAUNCH_KERNEL(half, half, float);
     } else if (atype == INFINI_DTYPE_BF16 && wtype == INFINI_DTYPE_BF16) {
-        LAUNCH_KERNEL(__hpcc_bfloat16, __hpcc_bfloat16, float);
+        LAUNCH_KERNEL(__maca_bfloat16, __maca_bfloat16, float);
     } else if (atype == INFINI_DTYPE_BF16 && wtype == INFINI_DTYPE_F32) {
-        LAUNCH_KERNEL(__hpcc_bfloat16, float, float);
+        LAUNCH_KERNEL(__maca_bfloat16, float, float);
     } else if (atype == INFINI_DTYPE_F16 && wtype == INFINI_DTYPE_F32) {
         LAUNCH_KERNEL(half, float, float);
     } else if (atype == INFINI_DTYPE_F32 && wtype == INFINI_DTYPE_F32) {
@@ -110,7 +110,7 @@ infiniStatus_t Descriptor::calculate(
     auto dim = _info.dim();
     uint32_t batch_size = static_cast<uint32_t>(_info.shape[0]);
     size_t nhead = _info.shape.size() > 2 ? _info.shape[1] : 1;
-    auto stream = reinterpret_cast<hcStream_t>(stream_);
+    auto stream = reinterpret_cast<mcStream_t>(stream_);
 
     // launch kernel with different block sizes
     if (_opaque->internal->maxThreadsPerBlock() == METAX_BLOCK_SIZE_1024) {
