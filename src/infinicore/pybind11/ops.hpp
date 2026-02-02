@@ -4,9 +4,13 @@
 
 #include "ops/add.hpp"
 #include "ops/add_rms_norm.hpp"
+#include "ops/argmin.hpp"
 #include "ops/attention.hpp"
 #include "ops/causal_softmax.hpp"
+#include "ops/cosine_embedding_loss.hpp"
 #include "ops/embedding.hpp"
+#include "ops/hardshrink.hpp"
+#include "ops/hardsigmoid.hpp"
 #include "ops/linear.hpp"
 #include "ops/matmul.hpp"
 #include "ops/mul.hpp"
@@ -42,6 +46,10 @@ inline void bind(py::module &m) {
     bind_swiglu(m);
     bind_rope(m);
     bind_embedding(m);
+    bind_hardsigmoid(m);
+    bind_hardshrink(m);
+    bind_argmin(m);
+    bind_cosine_embedding_loss(m);
 }
 
 } // namespace infinicore::ops

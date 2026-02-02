@@ -64,12 +64,32 @@ class OpTest(BaseOperatorTest):
     def get_test_cases(self):
         return parse_test_cases()
 
+    def prepare_pytorch_inputs_and_kwargs(self, test_case, device):
+        """Override to properly initialize target tensor with 1 or -1 values."""
+        inputs, kwargs = super().prepare_pytorch_inputs_and_kwargs(test_case, device)
+
+        if len(inputs) >= 3 and isinstance(inputs[2], torch.Tensor):
+            target = inputs[2]
+            target_shape = target.shape
+            target_dtype = target.dtype
+            target_device = target.device
+
+            new_target = torch.randint(0, 2, target_shape, device=target_device).to(
+                target_dtype
+            )
+            new_target = new_target * 2 - 1
+
+            inputs[2] = new_target
+
+        return inputs, kwargs
+
     def torch_operator(self, *args, **kwargs):
         return torch.nn.functional.cosine_embedding_loss(*args, **kwargs)
 
-    # def infinicore_operator(self, *args, **kwargs):
-    #     """InfiniCore implementation (operator not yet available)."""
-    #     return infinicore.nn.functional.cosine_embedding_loss(*args, **kwargs)
+    def infinicore_operator(self, *args, **kwargs):
+        """InfiniCore implementation"""
+        # return infinicore.nn.functional.cosine_embedding_loss(*args, **kwargs)
+        return infinicore.cosine_embedding_loss(*args, **kwargs)
 
 
 def main():

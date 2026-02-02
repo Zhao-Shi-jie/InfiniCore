@@ -54,6 +54,11 @@ from infinicore.ops.paged_caching import paged_caching
 from infinicore.ops.rearrange import rearrange
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.unsqueeze import unsqueeze
+from infinicore.ops.cosine_embedding_loss import cosine_embedding_loss
+from infinicore.ops.embedding import embedding
+from infinicore.ops.hardsigmoid import hardsigmoid
+from infinicore.ops.argmin import argmin
+from infinicore.ops.hardshrink import hardshrink
 from infinicore.tensor import (
     Tensor,
     empty,
@@ -123,6 +128,7 @@ __all__ = [
     "rearrange",
     "empty",
     "empty_like",
+    "embedding",
     "from_blob",
     "from_list",
     "from_numpy",
@@ -134,6 +140,10 @@ __all__ = [
     "strided_empty",
     "strided_from_blob",
     "zeros",
+    "hardsigmoid",
+    "hardshrink",
+    "argmin",
+    "cosine_embedding_loss",
 ]
 
 use_ntops = False
