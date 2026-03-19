@@ -9,6 +9,8 @@
 #include "cnrt.h"
 #include <functional>
 
+struct InfiniopTensorDescriptor;
+
 #define CHECK_BANG(API) CHECK_INTERNAL(API, CNNL_STATUS_SUCCESS)
 
 #define NRAM_MAX_SIZE 1024 * 240
