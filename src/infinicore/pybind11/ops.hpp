@@ -45,6 +45,7 @@
 #include "ops/topk.hpp"
 #include "ops/var.hpp"
 #include "ops/var_mean.hpp"
+#include "ops/spmv.hpp"
 
 namespace py = pybind11;
 
@@ -95,6 +96,7 @@ inline void bind(py::module &m) {
     bind_cdist(m);
     bind_binary_cross_entropy_with_logits(m);
     bind_reciprocal(m);
+    bind_spmv(m);
 }
 
 } // namespace infinicore::ops

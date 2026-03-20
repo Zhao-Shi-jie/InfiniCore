@@ -1732,3 +1732,31 @@ def silu_and_mul(lib):
     lib.infiniopDestroySiluAndMulDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+@OpRegister.operator
+def spmv_(lib):
+    lib.infiniopCreateSpMVDescriptor.restype = c_int32
+    lib.infiniopCreateSpMVDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        c_size_t,
+        c_size_t,  # num_rows
+        c_size_t,  # nnz
+    ]
+
+    lib.infiniopSpMV.restype = c_int32
+    lib.infiniopSpMV.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,  # y
+        c_void_p,  # x
+        c_void_p,  # values
+        c_void_p,  # row_ptr
+        c_void_p,  # col_indices
+        c_void_p,  # stream
+    ]
+
+    lib.infiniopDestroySpMVDescriptor.restype = c_int32
+    lib.infiniopDestroySpMVDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]

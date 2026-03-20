@@ -80,6 +80,7 @@ from infinicore.ops.topk import topk
 from infinicore.ops.unsqueeze import unsqueeze
 from infinicore.ops.var import var
 from infinicore.ops.var_mean import var_mean
+from infinicore.ops.spmv import spmv
 from infinicore.tensor import (
     Tensor,
     empty,
@@ -179,6 +180,9 @@ __all__ = [
     "var",
     "topk",
     "all",
+
+    #sparse op
+    "spmv",
 ]
 
 use_ntops = False

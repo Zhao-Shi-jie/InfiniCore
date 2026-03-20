@@ -37,7 +37,7 @@ void calculate(
         INFINICORE_CHECK_ERROR(infiniopCreateSpMVDescriptor(
             context::getInfiniopHandle(device),
             &desc,
-            output->descriptor(),
+            output->desc(),
             rows,
             cols,
             nnzs));

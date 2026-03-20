@@ -1,6 +1,5 @@
 #include "../../../devices/bang/bang_handle.h"
 #include "../../../devices/bang/common_bang.h"
-#include "../info.h"
 #include "bang.h"
 #include "mlu.h"
 #include "spmv_bang.h"
@@ -102,7 +101,7 @@ infiniStatus_t Descriptor::calculate(void *y, const void *x, const void *values,
         queue = (cnrtQueue_t)stream;
     }
     cnrtDim3_t dim = {256, 1, 1};
-    cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+    cnrtFunctionType_t ktype = cnrtFuncTypeBlock;
 
     int num_rows = static_cast<int>(_info.num_rows);
     int num_cols = static_cast<int>(_info.num_cols);
