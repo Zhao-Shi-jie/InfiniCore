@@ -110,6 +110,8 @@ from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
+from infinicore.ops.spmm import spmm, spmm_
+from infinicore.sparse import SpMat
 from infinicore.ops.take import take
 from infinicore.ops.tan import tan
 from infinicore.ops.topk import topk
@@ -140,6 +142,8 @@ __all__ = [
     "DeviceEvent",
     "dtype",
     "Tensor",
+    # Sparse types.
+    "SpMat",
     # Context functions.
     "get_device",
     "get_device_count",
@@ -252,6 +256,9 @@ __all__ = [
     "var",
     "topk",
     "all",
+    # Sparse operations.
+    "spmm",
+    "spmm_",
 ]
 
 use_ntops = False
