@@ -32,6 +32,22 @@ from infinicore.lib import _infinicore
 from infinicore.tensor import Tensor
 
 
+def _to_numpy_dtype(dtype: infinicore.dtype) -> type:
+    """Return the NumPy scalar type that matches the given *infinicore* dtype.
+
+    Only floating-point types used by SpMM are supported; raises
+    ``TypeError`` for anything else.
+    """
+    if dtype == infinicore.float32:
+        return np.float32
+    if dtype == infinicore.float64 or dtype == infinicore.double:
+        return np.float64
+    raise TypeError(
+        f"SpMat: unsupported dtype {dtype!r}. "
+        "Only float32 and float64 are supported for sparse values."
+    )
+
+
 class SpMat:
     """Sparse matrix in CSR (Compressed Sparse Row) format.
 
@@ -149,8 +165,7 @@ class SpMat:
         if dtype is None:
             dtype = infinicore.float32
 
-        # Convert to float32 if needed so scipy / numpy can process it
-        np_dtype = np.float32 if dtype == infinicore.float32 else np.float64
+        np_dtype = _to_numpy_dtype(dtype)
         dense = np.asarray(dense, dtype=np_dtype)
 
         m, k = dense.shape
@@ -219,7 +234,7 @@ class SpMat:
             device=device,
         )
         v_t = infinicore.from_numpy(
-            np.asarray(values, dtype=np.float32 if dtype == infinicore.float32 else np.float64),
+            np.asarray(values, dtype=_to_numpy_dtype(dtype)),
             dtype=dtype,
             device=device,
         )

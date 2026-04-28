@@ -35,6 +35,8 @@ void csr_spmm_cpu(T *C,
         int32_t row_end = row_offsets[row + 1];
         for (int32_t idx = row_start; idx < row_end; ++idx) {
             int32_t col = col_indices[idx];
+            // Pre-multiply alpha with the non-zero value once, before the
+            // inner column loop, to avoid redundant multiplications.
             float val = alpha * static_cast<float>(values[idx]);
             for (size_t j = 0; j < n; ++j) {
                 C[row * n + j] = static_cast<T>(
