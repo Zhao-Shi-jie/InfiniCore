@@ -8,6 +8,13 @@ class TensorDescriptor(Structure):
 infiniopTensorDescriptor_t = POINTER(TensorDescriptor)
 
 
+class SpMatDescriptor(Structure):
+    _fields_ = []
+
+
+infiniopSpMatDescriptor_t = POINTER(SpMatDescriptor)
+
+
 class Handle(Structure):
     _fields_ = [("device", c_int), ("device_id", c_int)]
 

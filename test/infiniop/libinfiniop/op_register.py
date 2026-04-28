@@ -1,5 +1,6 @@
 from .structs import (
     infiniopHandle_t,
+    infiniopSpMatDescriptor_t,
     infiniopTensorDescriptor_t,
     infiniopOperatorDescriptor_t,
 )
@@ -640,6 +641,41 @@ def avg_pool3d_(lib):
 
     lib.infiniopDestroyAvgPool3dDescriptor.restype = c_int32
     lib.infiniopDestroyAvgPool3dDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def spmm_(lib):
+    lib.infiniopCreateSpMMDescriptor.restype = c_int32
+    lib.infiniopCreateSpMMDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSpMMWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpMMWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpMM.restype = c_int32
+    lib.infiniopSpMM.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpMMDescriptor.restype = c_int32
+    lib.infiniopDestroySpMMDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 

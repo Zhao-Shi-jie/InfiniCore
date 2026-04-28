@@ -96,6 +96,7 @@ from infinicore.ops.logdet import logdet
 from infinicore.ops.logical_and import logical_and
 from infinicore.ops.logical_not import logical_not
 from infinicore.ops.masked_select import masked_select
+from infinicore.ops.gemm import gemm
 from infinicore.ops.matmul import matmul
 from infinicore.ops.mha_kvcache import mha_kvcache
 from infinicore.ops.mha_varlen import mha_varlen
@@ -130,6 +131,7 @@ from infinicore.tensor import (
     strided_from_blob,
     zeros,
 )
+from infinicore.spmat import SpMat, csr_spmat
 
 __all__ = [
     # Modules.
@@ -140,6 +142,7 @@ __all__ = [
     "DeviceEvent",
     "dtype",
     "Tensor",
+    "SpMat",
     # Context functions.
     "get_device",
     "get_device_count",
@@ -202,6 +205,7 @@ __all__ = [
     "logaddexp",
     "logaddexp2",
     "matmul",
+    "gemm",
     "equal",
     "mul",
     "diff",
@@ -223,6 +227,7 @@ __all__ = [
     "from_list",
     "from_numpy",
     "from_torch",
+    "csr_spmat",
     "mha_kvcache",
     "mha_varlen",
     "fmin",

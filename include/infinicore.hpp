@@ -4,4 +4,5 @@
 #include "infinicore/nn.hpp"
 #include "infinicore/ops.hpp"
 #include "infinicore/quantization.hpp"
+#include "infinicore/spmat.hpp"
 #include "infinicore/tensor.hpp"

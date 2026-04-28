@@ -103,6 +103,7 @@
 #include "infiniop/ops/softmax.h"
 #include "infiniop/ops/softplus.h"
 #include "infiniop/ops/softsign.h"
+#include "infiniop/ops/spmm.h"
 #include "infiniop/ops/sub.h"
 #include "infiniop/ops/sum.h"
 #include "infiniop/ops/swiglu.h"
@@ -122,5 +123,6 @@
 #include "infiniop/ops/var.h"
 #include "infiniop/ops/var_mean.h"
 #include "infiniop/ops/zeros.h"
+#include "infiniop/spmat_descriptor.h"
 #include "infiniop/tensor_descriptor.h"
 #endif // __INFINIOP_API_H__

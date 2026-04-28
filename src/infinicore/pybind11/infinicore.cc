@@ -8,6 +8,7 @@
 #include "dtype.hpp"
 #include "graph.hpp"
 #include "ops.hpp"
+#include "spmat.hpp"
 #include "tensor.hpp"
 
 namespace infinicore {
@@ -17,8 +18,9 @@ PYBIND11_MODULE(_infinicore, m) {
     device::bind(m);
     device_event::bind(m);
     dtype::bind(m);
-    ops::bind(m);
     tensor::bind(m);
+    spmat::bind(m);
+    ops::bind(m);
     graph::bind(m);
 }
 

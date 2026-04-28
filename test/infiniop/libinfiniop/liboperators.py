@@ -65,6 +65,21 @@ def open_lib():
     lib.infiniopCreateTensorDescriptor.restype = c_int
     lib.infiniopDestroyTensorDescriptor.argtypes = [infiniopTensorDescriptor_t]
     lib.infiniopDestroyTensorDescriptor.restype = c_int
+    lib.infiniopCreateCsrSpMatDescriptor.argtypes = [
+        POINTER(infiniopSpMatDescriptor_t),
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.infiniopCreateCsrSpMatDescriptor.restype = c_int
+    lib.infiniopDestroySpMatDescriptor.argtypes = [infiniopSpMatDescriptor_t]
+    lib.infiniopDestroySpMatDescriptor.restype = c_int
     lib.infiniopCreateHandle.argtypes = [POINTER(infiniopHandle_t)]
     lib.infiniopCreateHandle.restype = c_int
     lib.infiniopDestroyHandle.argtypes = [infiniopHandle_t]
