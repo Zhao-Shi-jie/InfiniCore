@@ -102,6 +102,7 @@
 #include "ops/unfold.hpp"
 #include "ops/upsample_bilinear.hpp"
 #include "ops/upsample_nearest.hpp"
+#include "ops/spmm.hpp"
 #include "ops/vander.hpp"
 #include "ops/var.hpp"
 #include "ops/var_mean.hpp"
@@ -218,6 +219,7 @@ inline void bind(py::module &m) {
     bind_selu(m);
     bind_sinh(m);
     bind_layer_norm(m);
+    bind_spmm(m);
 }
 
 } // namespace infinicore::ops
