@@ -101,6 +101,7 @@
 #include "infiniop/ops/sinh.h"
 #include "infiniop/ops/smooth_l1_loss.h"
 #include "infiniop/ops/softmax.h"
+#include "infiniop/ops/spmm.h"
 #include "infiniop/ops/softplus.h"
 #include "infiniop/ops/softsign.h"
 #include "infiniop/ops/sub.h"
