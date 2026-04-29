@@ -40,7 +40,7 @@ def _to_numpy_dtype(dtype: infinicore.dtype) -> type:
     """
     if dtype == infinicore.float32:
         return np.float32
-    if dtype == infinicore.float64 or dtype == infinicore.double:
+    if dtype == infinicore.float64:
         return np.float64
     raise TypeError(
         f"SpMat: unsupported dtype {dtype!r}. "
