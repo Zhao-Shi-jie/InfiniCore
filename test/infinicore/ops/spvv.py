@@ -41,9 +41,9 @@ def _generate_spvv_cases():
     random.seed(42)
     # (size, density)
     configs = [
-        # (128, 0.01),
-        # (1024, 0.01),
-        # (4096, 0.01),
+        (128, 0.01),
+        (1024, 0.01),
+        (4096, 0.01),
         (40960000, 0.01)
     ]
     for size, density in configs:
@@ -60,10 +60,9 @@ _TEST_CASES_DATA = _generate_spvv_cases()
 # ]
 
 _TOLERANCE_MAP = {
-    # infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    # infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
-    # infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
-    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
+    infinicore.float16: {"atol": 0, "rtol": 1e-2},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
 }
 
 _TENSOR_DTYPES = [

@@ -10,10 +10,10 @@ from framework.utils.tensor_utils import infinicore_tensor_from_torch
 
 _TEST_CASES_DATA = [
     # size, density
-    # (128, 0.04),
-    # (1024, 0.02),
-    # (4096, 0.01),
-    (81920, 0.01),
+    (128, 0.04),
+    (1024, 0.02),
+    (4096, 0.01),
+    (81920000, 0.01),
 ]
 
 _TENSOR_DTYPES = [infinicore.float32]
@@ -23,7 +23,7 @@ _INDEX_DTYPES = [
 ]
 
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
 }
 
 _RANDOM_SEED = 42

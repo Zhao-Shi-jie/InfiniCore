@@ -22,10 +22,12 @@ class SparseTestCase(TestCase):
 def _generate_cases():
     random.seed(42)
     configs = [
-        # (128, 0.03, 1.0, 0.0),
-        # (4096, 0.01, 0.5, 1.0),
-        # (1024, 0.01, -1.25, 0.25),
         (40960000, 0.01, 1.0, 0.0),
+        (128, 0.03, 1.0, 0.0),
+        (4096, 0.01, 0.5, 1.0),
+        (1024, 0.01, -1.25, 0.25),
+        #(8884096, 0.01, 1.0, 0.0),
+        (5120, 0.01, 0.5, 1.0),
     ]
     cases = []
     for size, density, alpha, beta in configs:
@@ -38,8 +40,8 @@ def _generate_cases():
 _TEST_CASES_DATA = _generate_cases()
 _TENSOR_DTYPES = [infinicore.float32]
 _TOLERANCE_MAP = {
-    # infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
-    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    # infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
 }
 
 

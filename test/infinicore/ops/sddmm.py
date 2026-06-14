@@ -21,9 +21,10 @@ def _generate_sddmm_cases():
     random.seed(42)
     # (rows, cols, k, density, alpha, beta)
     configs = [
-        # (128, 128, 128, 0.01, 1.0, 0.0),
-        # (1024, 1024, 1024, 0.01, 0.5, 1.0),
-        # (4096, 4096, 4096, 0.01, -1.25, 0.25),
+        # (5120, 5120, 5120, 0.01, 0.5, 1.0),
+        (128, 128, 128, 0.01, 1.0, 0.0),
+        (1024, 1024, 1024, 0.01, 0.5, 1.0),
+        (4096, 4096, 4096, 0.01, -1.25, 0.25),
         (5120, 5120, 5120, 0.01, 1.0, 0.0),
     ]
     for rows, cols, k, density, alpha, beta in configs:
@@ -201,36 +202,36 @@ class OpTest(BaseOperatorTest):
         finally:
             self._target_device = None
 
-    # def torch_operator(
-    #     self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
-    # ):
-    #     del sparse
-    #     del k
-    #     del density
-    #     if _use_dense_reference(values.device, self._target_device):
-    #         return sddmm_dense_reference(
-    #             values,
-    #             a,
-    #             b,
-    #             rows=rows,
-    #             cols=cols,
-    #             crow=crow,
-    #             col=col,
-    #             alpha=alpha,
-    #             beta=beta,
-    #             force_cpu=True,
-    #         )
-    #     return sddmm_sparse_reference(
-    #         values,
-    #         a,
-    #         b,
-    #         rows=rows,
-    #         cols=cols,
-    #         crow=crow,
-    #         col=col,
-    #         alpha=alpha,
-    #         beta=beta,
-    #     )
+    def torch_operator(
+        self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
+    ):
+        del sparse
+        del k
+        del density
+        if _use_dense_reference(values.device, self._target_device):
+            return sddmm_dense_reference(
+                values,
+                a,
+                b,
+                rows=rows,
+                cols=cols,
+                crow=crow,
+                col=col,
+                alpha=alpha,
+                beta=beta,
+                force_cpu=True,
+            )
+        return sddmm_sparse_reference(
+            values,
+            a,
+            b,
+            rows=rows,
+            cols=cols,
+            crow=crow,
+            col=col,
+            alpha=alpha,
+            beta=beta,
+        )
 
     def infinicore_operator(
         self, values, sparse, a, b, *, rows, cols, k, density, crow, col, alpha, beta
