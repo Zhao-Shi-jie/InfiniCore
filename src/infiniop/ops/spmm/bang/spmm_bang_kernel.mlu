@@ -1,7 +1,72 @@
 #include "../../../devices/bang/common_bang.h"
 
+__nram__ char spmm_nram_buffer[NRAM_MAX_SIZE];
+
 template <typename Tindex>
-__mlu_global__ void spmmCsrF32Kernel(
+__mlu_global__ void spmmCsrF32ContiguousKernel(
+    int rows,
+    int cols,
+    const Tindex *crow_indices,
+    const Tindex *col_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    int col_block,
+    float alpha,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)spmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_acc = (float *)nram_aligned;
+    float *nram_b = nram_acc + col_block;
+
+    int col_tiles = (cols + col_block - 1) / col_block;
+    int total_tiles = rows * col_tiles;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        int row = tile / col_tiles;
+        int col_begin = (tile - row * col_tiles) * col_block;
+        int curr_cols = cols - col_begin;
+        if (curr_cols > col_block) {
+            curr_cols = col_block;
+        }
+        int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+
+        __bang_write_value(nram_acc, aligned_cols, 0.0f);
+
+        Tindex ptr_begin = crow_indices[row];
+        Tindex ptr_end = crow_indices[row + 1];
+        for (Tindex ptr = ptr_begin; ptr < ptr_end; ++ptr) {
+            int k = static_cast<int>(col_indices[ptr]);
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, b + k * b_row_stride + col_begin, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, values[ptr], aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+        }
+
+        int c_offset = row * c_row_stride + col_begin;
+        if (alpha != 1.0f) {
+            __bang_mul_scalar(nram_acc, nram_acc, alpha, aligned_cols);
+        }
+        if (beta == 0.0f) {
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        } else {
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, beta, aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmmCsrF32StridedKernel(
     int rows,
     int cols,
     const Tindex *crow_indices,
@@ -16,23 +81,108 @@ __mlu_global__ void spmmCsrF32Kernel(
     float alpha,
     float beta) {
 
-    int row_begin = taskId;
-    for (int row = row_begin; row < rows; row += taskDim) {
-        Tindex ptr_begin = crow_indices[row];
-        Tindex ptr_end = crow_indices[row + 1];
-        for (int col = 0; col < cols; ++col) {
-            float acc = 0.0f;
-            for (Tindex ptr = ptr_begin; ptr < ptr_end; ++ptr) {
-                int k = static_cast<int>(col_indices[ptr]);
-                acc += values[ptr] * b[k * b_row_stride + col * b_col_stride];
-            }
-
-            int c_offset = row * c_row_stride + col * c_col_stride;
-            if (beta == 0.0f) {
-                c[c_offset] = alpha * acc;
-            } else {
-                c[c_offset] = alpha * acc + beta * c[c_offset];
-            }
+    int total = rows * cols;
+    for (int index = taskId; index < total; index += taskDim) {
+        int row = index / cols;
+        int col = index - row * cols;
+        float acc = 0.0f;
+        for (Tindex ptr = crow_indices[row]; ptr < crow_indices[row + 1]; ++ptr) {
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += values[ptr] * b[k * b_row_stride + col * b_col_stride];
         }
+
+        int c_offset = row * c_row_stride + col * c_col_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmmCsrF32SpmvKernel(
+    int rows,
+    const Tindex *crow_indices,
+    const Tindex *col_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    float alpha,
+    float beta) {
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        float acc = 0.0f;
+        for (Tindex ptr = crow_indices[row]; ptr < crow_indices[row + 1]; ++ptr) {
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += values[ptr] * b[k * b_row_stride];
+        }
+
+        int c_offset = row * c_row_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+__mlu_global__ void spmmCsrF32ScaleCKernel(
+    int rows,
+    int cols,
+    float *c,
+    int c_row_stride,
+    int c_col_stride,
+    float beta) {
+
+    int total = rows * cols;
+    for (int index = taskId; index < total; index += taskDim) {
+        int row = index / cols;
+        int col = index - row * cols;
+        int c_offset = row * c_row_stride + col * c_col_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = 0.0f;
+        } else {
+            c[c_offset] *= beta;
+        }
+    }
+}
+
+__mlu_global__ void spmmCsrF32ScaleCContiguousKernel(
+    int rows,
+    int cols,
+    float *c,
+    int c_row_stride,
+    int col_block,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)spmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_c = (float *)nram_aligned;
+
+    int col_tiles = (cols + col_block - 1) / col_block;
+    int total_tiles = rows * col_tiles;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        int row = tile / col_tiles;
+        int col_begin = (tile - row * col_tiles) * col_block;
+        int curr_cols = cols - col_begin;
+        if (curr_cols > col_block) {
+            curr_cols = col_block;
+        }
+        int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+
+        int c_offset = row * c_row_stride + col_begin;
+        if (beta == 0.0f) {
+            __bang_write_value(nram_c, aligned_cols, 0.0f);
+        } else {
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_c, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_c, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_c, nram_c, beta, aligned_cols);
+        }
+        __memcpy(c + c_offset, nram_c, curr_cols * sizeof(float), NRAM2GDRAM);
     }
 }
