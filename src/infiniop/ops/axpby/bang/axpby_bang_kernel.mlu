@@ -1,6 +1,87 @@
 #include "../../../devices/bang/common_bang.h"
 
-__mlu_global__ void axpbyScaleF32Kernel(
+__nram__ char axpby_nram_buffer[NRAM_MAX_SIZE];
+
+__mlu_global__ void axpbyScaleF32ContiguousKernel(
+    int n,
+    float *y,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)axpby_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_y = (float *)nram_aligned;
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - axpby_nram_buffer);
+    int align_elements = ALIGN_SIZE / sizeof(float);
+    int chunk_size = (int)((nram_usable / sizeof(float) / align_elements) * align_elements);
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    int chunks = core_elements / chunk_size;
+    int chunk_rem = core_elements % chunk_size;
+
+    for (int chunk = 0; chunk < chunks; ++chunk) {
+        int offset = core_offset + chunk * chunk_size;
+        __memcpy(nram_y, y + offset, chunk_size * sizeof(float), GDRAM2NRAM);
+        __bang_mul_scalar(nram_y, nram_y, beta, chunk_size);
+        __memcpy(y + offset, nram_y, chunk_size * sizeof(float), NRAM2GDRAM);
+    }
+
+    if (chunk_rem > 0) {
+        int offset = core_offset + chunks * chunk_size;
+        int aligned_rem = ((chunk_rem + align_elements - 1) / align_elements) * align_elements;
+        if (aligned_rem != chunk_rem) {
+            __bang_write_value(nram_y, aligned_rem, 0.0f);
+        }
+        __memcpy(nram_y, y + offset, chunk_rem * sizeof(float), GDRAM2NRAM);
+        __bang_mul_scalar(nram_y, nram_y, beta, aligned_rem);
+        __memcpy(y + offset, nram_y, chunk_rem * sizeof(float), NRAM2GDRAM);
+    }
+}
+
+__mlu_global__ void axpbyZeroF32ContiguousKernel(
+    int n,
+    float *y) {
+
+    char *nram_aligned = (char *)(((size_t)axpby_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_y = (float *)nram_aligned;
+
+    size_t nram_usable = NRAM_MAX_SIZE - (nram_aligned - axpby_nram_buffer);
+    int align_elements = ALIGN_SIZE / sizeof(float);
+    int chunk_size = (int)((nram_usable / sizeof(float) / align_elements) * align_elements);
+
+    int elements_per_core = n / taskDim;
+    int remain = n % taskDim;
+    int core_elements = elements_per_core + (taskId < remain ? 1 : 0);
+    int core_offset = taskId < remain ? taskId * core_elements : taskId * elements_per_core + remain;
+
+    if (core_elements <= 0) {
+        return;
+    }
+
+    __bang_write_value(nram_y, chunk_size, 0.0f);
+
+    int chunks = core_elements / chunk_size;
+    int chunk_rem = core_elements % chunk_size;
+
+    for (int chunk = 0; chunk < chunks; ++chunk) {
+        int offset = core_offset + chunk * chunk_size;
+        __memcpy(y + offset, nram_y, chunk_size * sizeof(float), NRAM2GDRAM);
+    }
+
+    if (chunk_rem > 0) {
+        int offset = core_offset + chunks * chunk_size;
+        __memcpy(y + offset, nram_y, chunk_rem * sizeof(float), NRAM2GDRAM);
+    }
+}
+
+__mlu_global__ void axpbyScaleF32StridedKernel(
     int n,
     int incy,
     float *y,

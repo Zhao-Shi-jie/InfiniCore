@@ -44,29 +44,92 @@ template <typename Tindex>
 static infiniStatus_t calculateByIndex(
     const SDDMMInfo &info,
     infiniopSpMatDescriptor_t c_desc,
+    int core_per_cluster,
+    int cluster_count,
     void *c_values,
     const void *a,
     const void *b,
     float alpha,
     float beta,
     cnrtQueue_t queue) {
-    cnrtDim3_t dim = {16, 1, 1};
-    cnrtFunctionType_t type = cnrtFuncTypeUnion4;
+    cnrtDim3_t dim = {
+        utils::cast<unsigned int>(core_per_cluster),
+        utils::cast<unsigned int>(cluster_count),
+        1};
+    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
 
-    sddmmCsrF32Kernel<Tindex><<<dim, type, queue>>>(
-        utils::cast<int>(info.m),
-        utils::cast<int>(info.k),
-        reinterpret_cast<const Tindex *>(c_desc->crowIndices()),
-        reinterpret_cast<const Tindex *>(c_desc->colIndices()),
-        reinterpret_cast<const float *>(a),
-        utils::cast<int>(info.a_matrix.row_stride),
-        utils::cast<int>(info.a_matrix.col_stride),
-        reinterpret_cast<const float *>(b),
-        utils::cast<int>(info.b_matrix.row_stride),
-        utils::cast<int>(info.b_matrix.col_stride),
-        reinterpret_cast<float *>(c_values),
-        alpha,
-        beta);
+    int rows = utils::cast<int>(info.m);
+    int k_dim = utils::cast<int>(info.k);
+    int nnz = utils::cast<int>(info.nnz);
+    int a_row_stride = utils::cast<int>(info.a_matrix.row_stride);
+    int a_col_stride = utils::cast<int>(info.a_matrix.col_stride);
+    int b_row_stride = utils::cast<int>(info.b_matrix.row_stride);
+    int b_col_stride = utils::cast<int>(info.b_matrix.col_stride);
+    auto crow = reinterpret_cast<const Tindex *>(c_desc->crowIndices());
+    auto col = reinterpret_cast<const Tindex *>(c_desc->colIndices());
+    auto a_data = reinterpret_cast<const float *>(a);
+    auto b_data = reinterpret_cast<const float *>(b);
+    auto c_data = reinterpret_cast<float *>(c_values);
+
+    if (alpha == 0.0f || nnz == 0 || k_dim == 0) {
+        sddmmCsrF32ScaleCKernel<<<dim, type, queue>>>(
+            nnz,
+            c_data,
+            beta);
+    } else if (a_col_stride == 1) {
+        int align_elements = utils::cast<int>(ALIGN_SIZE / sizeof(float));
+        int max_full_k = utils::cast<int>((NRAM_MAX_SIZE - ALIGN_SIZE) / (2 * sizeof(float)));
+        int full_k_capacity = (max_full_k / align_elements) * align_elements;
+        if (full_k_capacity <= 0) {
+            full_k_capacity = align_elements;
+        }
+
+        if (k_dim <= full_k_capacity) {
+            sddmmCsrF32ReuseAFullKKernel<Tindex><<<dim, type, queue>>>(
+                rows,
+                k_dim,
+                crow,
+                col,
+                a_data,
+                a_row_stride,
+                b_data,
+                b_row_stride,
+                b_col_stride,
+                c_data,
+                alpha,
+                beta);
+        } else {
+            sddmmCsrF32VectorKernel<Tindex><<<dim, type, queue>>>(
+                rows,
+                k_dim,
+                full_k_capacity,
+                crow,
+                col,
+                a_data,
+                a_row_stride,
+                b_data,
+                b_row_stride,
+                b_col_stride,
+                c_data,
+                alpha,
+                beta);
+        }
+    } else {
+        sddmmCsrF32StridedKernel<Tindex><<<dim, type, queue>>>(
+            rows,
+            k_dim,
+            crow,
+            col,
+            a_data,
+            a_row_stride,
+            a_col_stride,
+            b_data,
+            b_row_stride,
+            b_col_stride,
+            c_data,
+            alpha,
+            beta);
+    }
 
     cnrtQueueSync(queue);
     return INFINI_STATUS_SUCCESS;
@@ -90,11 +153,13 @@ infiniStatus_t Descriptor::calculate(
     }
 
     auto queue = reinterpret_cast<cnrtQueue_t>(stream);
+    int core_per_cluster = _opaque->internal->getCorePerCluster();
+    int cluster_count = _opaque->internal->getClusterCount();
     switch (_index_dtype) {
     case INFINI_DTYPE_I32:
-        return calculateByIndex<int32_t>(_info, _c_desc, c_values, a, b, alpha, beta, queue);
+        return calculateByIndex<int32_t>(_info, _c_desc, core_per_cluster, cluster_count, c_values, a, b, alpha, beta, queue);
     case INFINI_DTYPE_I64:
-        return calculateByIndex<int64_t>(_info, _c_desc, c_values, a, b, alpha, beta, queue);
+        return calculateByIndex<int64_t>(_info, _c_desc, core_per_cluster, cluster_count, c_values, a, b, alpha, beta, queue);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }
