@@ -14,7 +14,8 @@ class SparseTestCase(TestCase):
     def __str__(self):
         return (
             f"TestCase({self.description} - rows={self.kwargs['rows']}; "
-            f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f})"
+            f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f}; "
+            f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
 
@@ -94,16 +95,16 @@ class CsrSpMatSpec(TensorSpec):
 
 def _generate_spmv_cases():
     cases = []
-    # (rows, cols, density)
+    # (rows, cols, density, alpha, beta)
     configs = [
-        (128, 128, 0.02),  # Baseline
-        (1024, 1024, 0.01),  # 1K scale
-        (1024, 1024, 0.02),  # 1K scale
-        (4096, 4096, 0.01),  # 4K scale
+        (128, 128, 0.02, 0.5, 1.0),  # Baseline
+        (1024, 1024, 0.01, 0.5, 1.0),  # 1K scale
+        (1024, 1024, 0.02, 1.0, 0.0),  # 1K scale
+        (4096, 4096, 0.01, 0.5, 1.0),  # 4K scale
     ]
-    for rows, cols, density in configs:
+    for rows, cols, density, alpha, beta in configs:
         crow, col = random_csr_indices(rows, cols, density, seed=42)
-        cases.append((rows, cols, density, crow, col))
+        cases.append((rows, cols, density, crow, col, alpha, beta))
     return cases
 
 
@@ -149,7 +150,7 @@ def spmv_dense_reference(values, x, *, rows, cols, crow, col):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, density, crow, col in _TEST_CASES_DATA:
+    for rows, cols, density, crow, col, alpha, beta in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
             values_spec = CachedTensorSpec.from_tensor(
@@ -202,6 +203,8 @@ def parse_test_cases():
                         "density": density,
                         "crow": crow,
                         "col": col,
+                        "alpha": alpha,
+                        "beta": beta,
                         "out": TensorSpec.from_tensor((rows,), dtype=dtype, name="out"),
                     },
                     comparison_target="out",
@@ -220,7 +223,7 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(
-        self, values, sparse, x, *, rows, cols, density, crow, col, out=None
+        self, values, sparse, x, *, rows, cols, density, crow, col, alpha, beta, out=None
     ):
         del sparse
         del density
@@ -232,15 +235,17 @@ class OpTest(BaseOperatorTest):
             result = spmv_sparse_reference(
                 values, x, rows=rows, cols=cols, crow=crow, col=col
             )
+        result = alpha * result
         if out is not None:
+            result = result + beta * out
             out.copy_(result)
             return out
         return result
 
     def infinicore_operator(
-        self, _values, sparse, x, *, out=None, **_unused
+        self, _values, sparse, x, *, alpha, beta, out=None, **_unused
     ):
-        return infinicore.spmv(sparse, x, out=out)
+        return infinicore.spmv(sparse, x, alpha=alpha, beta=beta, out=out)
 
 
 if __name__ == "__main__":

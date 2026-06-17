@@ -17,7 +17,7 @@ void SpMV::execute(Tensor y, const SpMat &a, const Tensor &x, float alpha, float
 
 Tensor spmv(const SpMat &a, const Tensor &x, float alpha, float beta) {
     INFINICORE_ASSERT(a);
-    auto y = Tensor::empty({a->rows()}, a->dtype(), x->device());
+    auto y = Tensor::zeros({a->rows()}, a->dtype(), x->device());
     spmv_(y, a, x, alpha, beta);
     return y;
 }

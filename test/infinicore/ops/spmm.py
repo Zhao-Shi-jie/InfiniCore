@@ -19,7 +19,8 @@ class SparseTestCase(TestCase):
     def __str__(self):
         return (
             f"TestCase({self.description} - rows={self.kwargs['rows']}; "
-            f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f})"
+            f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f}; "
+            f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
 
@@ -99,16 +100,16 @@ class CsrSpMatSpec(TensorSpec):
 
 def _generate_spmm_cases():
     cases = []
-    # (rows, cols, n, density)
+    # (rows, cols, n, density, alpha, beta)
     configs = [
-        (128, 128, 128, 0.01),  # Baseline small test
-        (1024, 1024, 1024, 0.01),  # 1K scale
-        (1024, 1024, 1024, 0.02),  # 1K scale with higher density
-        (4096, 2048, 4096, 0.01),  # 2K scale
+        (128, 128, 128, 0.01, 0.5, 1.0),  # Baseline small test
+        (1024, 1024, 1024, 0.01, 0.5, 1.0),  # 1K scale
+        (1024, 1024, 1024, 0.02, 0.53, 1.05),  # 1K scale with higher density
+        (4096, 2048, 4096, 0.01, 0.5, 1.0),  # 2K scale
     ]
-    for rows, cols, n, density in configs:
+    for rows, cols, n, density, alpha, beta in configs:
         crow, col = random_csr_indices(rows, cols, density, seed=42)
-        cases.append((rows, cols, n, density, crow, col))
+        cases.append((rows, cols, n, density, crow, col, alpha, beta))
     return cases
 
 _TEST_CASES_DATA = _generate_spmm_cases()
@@ -138,7 +139,7 @@ def csr_to_dense(values, rows, cols, crow, col):
 
 def parse_test_cases():
     test_cases = []
-    for rows, cols, n, density, crow, col in _TEST_CASES_DATA:
+    for rows, cols, n, density, crow, col, alpha, beta in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
             values_spec = CachedTensorSpec.from_tensor(
@@ -191,6 +192,8 @@ def parse_test_cases():
                         "density": density,
                         "crow": crow,
                         "col": col,
+                        "alpha": alpha,
+                        "beta": beta,
                         "out": TensorSpec.from_tensor(
                             (rows, n), dtype=dtype, name="out"
                         ),
@@ -211,21 +214,22 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(
-        self, values, sparse, b, *, rows, cols, density, crow, col, out=None
+        self, values, sparse, b, *, rows, cols, density, crow, col, alpha, beta, out=None
     ):
         del sparse
         del density
         sparse = csr_to_dense(values, rows, cols, crow, col)
-        result = torch.matmul(sparse, b)
+        result = alpha * torch.matmul(sparse, b)
         if out is not None:
+            result = result + beta * out
             out.copy_(result)
             return out
         return result
 
     def infinicore_operator(
-        self, _values, sparse, b, *, out=None, **_unused
+        self, _values, sparse, b, *, alpha, beta, out=None, **_unused
     ):
-        return infinicore.spmm(sparse, b, out=out)
+        return infinicore.spmm(sparse, b, alpha=alpha, beta=beta, out=out)
 
 
 if __name__ == "__main__":

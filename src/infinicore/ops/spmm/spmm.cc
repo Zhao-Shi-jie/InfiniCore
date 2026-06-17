@@ -17,7 +17,7 @@ void SpMM::execute(Tensor c, const SpMat &a, const Tensor &b, float alpha, float
 
 Tensor spmm(const SpMat &a, const Tensor &b, float alpha, float beta) {
     INFINICORE_ASSERT(a);
-    auto c = Tensor::empty({a->rows(), b->size(1)}, a->dtype(), b->device());
+    auto c = Tensor::zeros({a->rows(), b->size(1)}, a->dtype(), b->device());
     spmm_(c, a, b, alpha, beta);
     return c;
 }
