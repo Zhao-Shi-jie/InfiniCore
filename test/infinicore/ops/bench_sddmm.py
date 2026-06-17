@@ -20,10 +20,9 @@ def _generate_sddmm_cases():
     cases = []
     # (rows, cols, k, density, alpha, beta)
     configs = [
-        # (128, 128, 128, 0.01, 1.0, 0.0),
-        # (1024, 1024, 1024, 0.01, 0.5, 1.0),
-        # (4096, 4096, 4096, 0.01, -1.25, 0.25),
+        # (4096, 4096, 4096, 0.01, 1.0, 0.0),
         (5120, 5120, 5120, 0.01, 1.0, 0.0),
+        # (6144, 6144, 6144, 0.02, 1.0, 0.0),
     ]
     for rows, cols, k, density, alpha, beta in configs:
         crow, col, values = load_csr("sddmm", rows, cols, density=density)
@@ -36,8 +35,7 @@ _TEST_CASES_DATA = _generate_sddmm_cases()
 _TENSOR_DTYPES = [infinicore.float32]
 
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
-    # infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
+    infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 

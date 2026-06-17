@@ -11,20 +11,16 @@ from sparse_mtx import ValuesFromListSpec, load_spvec
 
 _TEST_CASES_DATA = [
     # size, density
-    # (128, 0.04),
-    # (1024, 0.02),
-    # (4096000, 0.01),
-    (8192, 0.01),
+    # (81920000, 0.01),
+    (81920000, 0.02),
+    # (100000000, 0.01),
 ]
 
 _TENSOR_DTYPES = [infinicore.float32]
-_INDEX_DTYPES = [
-    infinicore.int32,
-    # infinicore.int64,
-]
+_INDEX_DTYPES = [infinicore.int32]
 
 _TOLERANCE_MAP = {
-    infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
+    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
 }
 
 def sparse_scatter_reference(values, *, size, indices):

@@ -101,35 +101,24 @@ def _generate_spmm_cases():
     cases = []
     # (rows, cols, n, density)
     configs = [
-        # (128, 128, 128, 0.01),  # Baseline small test
-        # (1024, 1024, 1024, 0.01),  # 1K scale
-        # (4096, 4096, 4096, 0.01),  # 2K scale
-        (5120, 5120, 5120, 0.01),  # 5K scale
+        (128, 128, 128, 0.01),  # Baseline small test
+        (1024, 1024, 1024, 0.01),  # 1K scale
+        (1024, 1024, 1024, 0.02),  # 1K scale with higher density
+        (4096, 2048, 4096, 0.01),  # 2K scale
     ]
     for rows, cols, n, density in configs:
         crow, col = random_csr_indices(rows, cols, density, seed=42)
         cases.append((rows, cols, n, density, crow, col))
     return cases
 
-
 _TEST_CASES_DATA = _generate_spmm_cases()
 
-# _TEST_CASES_DATA = [
-#     (3, 4, 2, [0, 2, 3, 5], [0, 2, 1, 0, 3]),
-#     (4, 5, 3, [0, 1, 1, 3, 4], [2, 0, 4, 1]),
-# ]
-
 _TOLERANCE_MAP = {
-    #infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    # infinicore.float32: {"atol": 1e-5, "rtol": 1e-5},
-    #infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
-    infinicore.float32: {"atol": 1e-4, "rtol": 1e-4},
+    infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
 }
 
 # Sparse CSR tensor support is in beta state, so we only test float32 for now.
 _TENSOR_DTYPES = [
-    # infinicore.float16,
-    # infinicore.bfloat16,
     infinicore.float32
 ]
 

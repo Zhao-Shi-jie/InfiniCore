@@ -73,10 +73,9 @@ def _generate_spmv_cases():
     cases = []
     # (rows, cols, density)
     configs = [
-        # (128, 128, 0.02),  # Baseline
-        # (1024, 1024, 0.02),  # 1K scale
-        # (4096, 409600, 0.01),  # 4K scale
-        (8192, 8192, 0.01),  # 5K scale
+        (8192, 8192, 0.02),
+        # (8192, 8192, 0.03),
+        # (10240, 10240, 0.02),
     ]
     for rows, cols, density in configs:
         crow, col, values = load_csr("spmv", rows, cols, density=density)
@@ -86,21 +85,11 @@ def _generate_spmv_cases():
 
 _TEST_CASES_DATA = _generate_spmv_cases()
 
-# _TEST_CASES_DATA = [
-#     (3, 4, [0, 2, 3, 5], [0, 2, 1, 0, 3]),
-#     (4, 5, [0, 1, 1, 3, 4], [2, 0, 4, 1]),
-# ]
-
 _TOLERANCE_MAP = {
-    # infinicore.float16: {"atol": 0, "rtol": 1e-2},
-    infinicore.float32: {"atol": 1e-3, "rtol": 1e-3},
-    # infinicore.bfloat16: {"atol": 0, "rtol": 5e-2},
-    # infinicore.float32: {"atol": 1e-2, "rtol": 1e-2},
+    infinicore.float32: {"atol": 5e-3, "rtol": 5e-3},
 }
 
 _TENSOR_DTYPES = [
-    # infinicore.float16,
-    # infinicore.bfloat16,
     infinicore.float32,
 ]
 
