@@ -2,7 +2,10 @@
 import argparse
 import subprocess
 import sys
+import os
 
+if "INFINICORE_SPARSE_MTX_DIR" in os.environ:
+    del os.environ["INFINICORE_SPARSE_MTX_DIR"]
 
 SPARSE_OPS = [
     "spmv",
