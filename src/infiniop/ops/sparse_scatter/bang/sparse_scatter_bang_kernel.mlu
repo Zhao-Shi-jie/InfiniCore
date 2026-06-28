@@ -1,0 +1,17 @@
+#include "../../../devices/bang/common_bang.h"
+
+template <typename Tindex>
+__mlu_global__ void sparseScatterF32Kernel(
+    int nnz,
+    int output_size,
+    int output_stride,
+    const Tindex *indices,
+    const float *values,
+    float *output) {
+    for (int i = taskId; i < nnz; i += taskDim) {
+        Tindex index = indices[i];
+        if (index >= 0 && static_cast<int>(index) < output_size) {
+            output[static_cast<int>(index) * output_stride] = values[i];
+        }
+    }
+}

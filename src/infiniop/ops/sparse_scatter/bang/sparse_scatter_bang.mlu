@@ -1,0 +1,87 @@
+#include "../../../devices/bang/common_bang.h"
+#include "sparse_scatter_bang.h"
+#include "sparse_scatter_bang_kernel.mlu"
+
+namespace op::sparse_scatter::bang {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t output_desc,
+    infiniopSpVecDescriptor_t input_desc) {
+    auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
+    auto dtype = output_desc->dtype();
+    auto index_dtype = input_desc->indicesDesc()->dtype();
+
+    CHECK_DTYPE(dtype, INFINI_DTYPE_F32);
+    CHECK_DTYPE(index_dtype, INFINI_DTYPE_I32, INFINI_DTYPE_I64);
+
+    auto result = SparseScatterInfo::create(output_desc, input_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        dtype,
+        index_dtype,
+        result.take(),
+        input_desc,
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename Tindex>
+static infiniStatus_t calculateByIndex(
+    const SparseScatterInfo &info,
+    infiniopSpVecDescriptor_t input_desc,
+    void *output,
+    cnrtQueue_t queue) {
+    cnrtDim3_t dim = {16, 1, 1};
+    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+
+    sparseScatterF32Kernel<Tindex><<<dim, type, queue>>>(
+        utils::cast<int>(info.nnz),
+        utils::cast<int>(info.output_vector.size),
+        utils::cast<int>(info.output_vector.stride),
+        reinterpret_cast<const Tindex *>(input_desc->indices()),
+        reinterpret_cast<const float *>(input_desc->values()),
+        reinterpret_cast<float *>(output));
+
+    cnrtQueueSync(queue);
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    void *output,
+    void *stream) const {
+    (void)workspace;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
+    if (_dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    auto queue = reinterpret_cast<cnrtQueue_t>(stream);
+    switch (_index_dtype) {
+    case INFINI_DTYPE_I32:
+        return calculateByIndex<int32_t>(_info, _input_desc, output, queue);
+    case INFINI_DTYPE_I64:
+        return calculateByIndex<int64_t>(_info, _input_desc, output, queue);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+} // namespace op::sparse_scatter::bang
