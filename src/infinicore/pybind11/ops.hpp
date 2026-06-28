@@ -20,6 +20,7 @@
 #include "ops/atanh.hpp"
 #include "ops/attention.hpp"
 #include "ops/avg_pool1d.hpp"
+#include "ops/axpby.hpp"
 #include "ops/axpy.hpp"
 #include "ops/baddbmm.hpp"
 #include "ops/bilinear.hpp"
@@ -104,6 +105,7 @@
 #include "ops/rwkv5_wkv.hpp"
 #include "ops/scal.hpp"
 #include "ops/scatter.hpp"
+#include "ops/sddmm.hpp"
 #include "ops/selu.hpp"
 #include "ops/sigmoid.hpp"
 #include "ops/silu.hpp"
@@ -112,6 +114,11 @@
 #include "ops/smooth_l1_loss.hpp"
 #include "ops/softplus.hpp"
 #include "ops/softsign.hpp"
+#include "ops/sparse_gather.hpp"
+#include "ops/sparse_scatter.hpp"
+#include "ops/spmm.hpp"
+#include "ops/spmv.hpp"
+#include "ops/spvv.hpp"
 #include "ops/sum.hpp"
 #include "ops/swap.hpp"
 #include "ops/swiglu.hpp"
@@ -150,6 +157,7 @@ inline void bind(py::module &m) {
     bind_attention(m);
     bind_asinh(m);
     bind_asum(m);
+    bind_axpby(m);
     bind_axpy(m);
     bind_baddbmm(m);
     bind_bilinear(m);
@@ -234,6 +242,12 @@ inline void bind(py::module &m) {
     bind_broadcast_to(m);
     bind_softplus(m);
     bind_softsign(m);
+    bind_sddmm(m);
+    bind_spmm(m);
+    bind_spmv(m);
+    bind_spvv(m);
+    bind_sparse_gather(m);
+    bind_sparse_scatter(m);
     bind_linear(m);
     bind_huber_loss(m);
     bind_triplet_margin_with_distance_loss(m);

@@ -11,6 +11,14 @@ from ctypes import (
 
 from .structs import (
     infiniopHandle_t,
+    infiniopSpMatDescriptor_t,
+    infiniopSpVecDescriptor_t,
+    infiniopTensorDescriptor_t,
+    infiniopOperatorDescriptor_t,
+)
+
+from .structs import (
+    infiniopHandle_t,
     infiniopOperatorDescriptor_t,
     infiniopTensorDescriptor_t,
 )
@@ -681,6 +689,212 @@ def avg_pool3d_(lib):
 
     lib.infiniopDestroyAvgPool3dDescriptor.restype = c_int32
     lib.infiniopDestroyAvgPool3dDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def spmm_(lib):
+    lib.infiniopCreateSpMMDescriptor.restype = c_int32
+    lib.infiniopCreateSpMMDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSpMMWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpMMWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpMM.restype = c_int32
+    lib.infiniopSpMM.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpMMDescriptor.restype = c_int32
+    lib.infiniopDestroySpMMDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def spmv_(lib):
+    lib.infiniopCreateSpMVDescriptor.restype = c_int32
+    lib.infiniopCreateSpMVDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopGetSpMVWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpMVWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpMV.restype = c_int32
+    lib.infiniopSpMV.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpMVDescriptor.restype = c_int32
+    lib.infiniopDestroySpMVDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def spvv_(lib):
+    lib.infiniopCreateSpVVDescriptor.restype = c_int32
+    lib.infiniopCreateSpVVDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+        infiniopTensorDescriptor_t,
+        c_void_p,
+    ]
+
+    lib.infiniopGetSpVVWorkspaceSize.restype = c_int32
+    lib.infiniopGetSpVVWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSpVV.restype = c_int32
+    lib.infiniopSpVV.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySpVVDescriptor.restype = c_int32
+    lib.infiniopDestroySpVVDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def sddmm_(lib):
+    lib.infiniopCreateSDDMMDescriptor.restype = c_int32
+    lib.infiniopCreateSDDMMDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopSpMatDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSDDMMWorkspaceSize.restype = c_int32
+    lib.infiniopGetSDDMMWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSDDMM.restype = c_int32
+    lib.infiniopSDDMM.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySDDMMDescriptor.restype = c_int32
+    lib.infiniopDestroySDDMMDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def sparse_gather_(lib):
+    lib.infiniopCreateSparseGatherDescriptor.restype = c_int32
+    lib.infiniopCreateSparseGatherDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+        infiniopTensorDescriptor_t,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopGetSparseGatherWorkspaceSize.restype = c_int32
+    lib.infiniopGetSparseGatherWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSparseGather.restype = c_int32
+    lib.infiniopSparseGather.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySparseGatherDescriptor.restype = c_int32
+    lib.infiniopDestroySparseGatherDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def sparse_scatter_(lib):
+    lib.infiniopCreateSparseScatterDescriptor.restype = c_int32
+    lib.infiniopCreateSparseScatterDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopSpVecDescriptor_t,
+    ]
+
+    lib.infiniopGetSparseScatterWorkspaceSize.restype = c_int32
+    lib.infiniopGetSparseScatterWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSparseScatter.restype = c_int32
+    lib.infiniopSparseScatter.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySparseScatterDescriptor.restype = c_int32
+    lib.infiniopDestroySparseScatterDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 
@@ -2515,6 +2729,39 @@ def axpy_(lib):
 
     lib.infiniopDestroyAxpyDescriptor.restype = c_int32
     lib.infiniopDestroyAxpyDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def axpby_(lib):
+    lib.infiniopCreateAxpbyDescriptor.restype = c_int32
+    lib.infiniopCreateAxpbyDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopSpVecDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetAxpbyWorkspaceSize.restype = c_int32
+    lib.infiniopGetAxpbyWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAxpby.restype = c_int32
+    lib.infiniopAxpby.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_float,
+        c_float,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyAxpbyDescriptor.restype = c_int32
+    lib.infiniopDestroyAxpbyDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
 

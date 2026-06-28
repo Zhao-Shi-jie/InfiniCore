@@ -61,6 +61,7 @@ from infinicore.ops.asinh import asinh
 from infinicore.ops.asum import asum
 from infinicore.ops.atanh import atanh
 from infinicore.ops.attention import attention
+from infinicore.ops.axpby import axpby
 from infinicore.ops.axpy import axpy
 from infinicore.ops.baddbmm import baddbmm
 from infinicore.ops.bilinear import bilinear
@@ -127,6 +128,12 @@ from infinicore.ops.rotmg import rotmg
 from infinicore.ops.scal import scal
 from infinicore.ops.scatter import scatter
 from infinicore.ops.sinh import sinh
+from infinicore.ops.sddmm import sddmm
+from infinicore.ops.spmm import spmm
+from infinicore.ops.spmv import spmv
+from infinicore.ops.spvv import spvv
+from infinicore.ops.sparse_gather import sparse_gather
+from infinicore.ops.sparse_scatter import sparse_scatter
 from infinicore.ops.squeeze import squeeze
 from infinicore.ops.sum import sum
 from infinicore.ops.swap import swap
@@ -151,6 +158,8 @@ from infinicore.tensor import (
     strided_from_blob,
     zeros,
 )
+from infinicore.spmat import SpMat, csr_spmat
+from infinicore.spvec import SpVec, coo_spvec
 
 __all__ = [
     # Modules.
@@ -161,6 +170,8 @@ __all__ = [
     "DeviceEvent",
     "dtype",
     "Tensor",
+    "SpMat",
+    "SpVec",
     # Context functions.
     "get_device",
     "get_device_count",
@@ -206,6 +217,7 @@ __all__ = [
     "argwhere",
     "asin",
     "asum",
+    "axpby",
     "axpy",
     "blas_amax",
     "blas_amin",
@@ -230,6 +242,12 @@ __all__ = [
     "logaddexp",
     "logaddexp2",
     "matmul",
+    "sddmm",
+    "spmm",
+    "spmv",
+    "spvv",
+    "sparse_gather",
+    "sparse_scatter",
     "equal",
     "mul",
     "diff",
@@ -253,6 +271,8 @@ __all__ = [
     "from_list_by_numpy",
     "from_numpy",
     "from_torch",
+    "csr_spmat",
+    "coo_spvec",
     "mha_kvcache",
     "mha_varlen",
     "mha",
