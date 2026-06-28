@@ -1,0 +1,37 @@
+#include "../../../devices/bang/common_bang.h"
+
+template <typename Tindex>
+__mlu_global__ void spmvCsrF32Kernel(
+    int rows,
+    const Tindex *crow_indices,
+    const Tindex *col_indices,
+    const float *values,
+    const float *x,
+    int x_stride,
+    float *y,
+    int y_stride,
+    float alpha,
+    float beta) {
+
+    int rows_per_task = (rows + taskDim - 1) / taskDim;
+    int row_begin = taskId * rows_per_task;
+    int row_end = row_begin + rows_per_task;
+    if (row_end > rows) {
+        row_end = rows;
+    }
+
+    for (int row = row_begin; row < row_end; ++row) {
+        float acc = 0.0f;
+        for (Tindex ptr = crow_indices[row]; ptr < crow_indices[row + 1]; ++ptr) {
+            int col = static_cast<int>(col_indices[ptr]);
+            acc += values[ptr] * x[col * x_stride];
+        }
+
+        int y_offset = row * y_stride;
+        if (beta == 0.0f) {
+            y[y_offset] = alpha * acc;
+        } else {
+            y[y_offset] = alpha * acc + beta * y[y_offset];
+        }
+    }
+}

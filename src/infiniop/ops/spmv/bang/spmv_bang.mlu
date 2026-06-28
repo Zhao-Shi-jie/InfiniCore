@@ -1,0 +1,105 @@
+#include "../../../devices/bang/common_bang.h"
+#include "spmv_bang.h"
+#include "spmv_bang_kernel.mlu"
+
+namespace op::spmv::bang {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t y_desc,
+    infiniopSpMatDescriptor_t a_desc,
+    infiniopTensorDescriptor_t x_desc,
+    void *y,
+    const void *x) {
+    (void)y;
+    (void)x;
+
+    auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
+    auto dtype = y_desc->dtype();
+    auto index_dtype = a_desc->crowIndicesDesc()->dtype();
+
+    CHECK_DTYPE(dtype, INFINI_DTYPE_F32);
+    CHECK_DTYPE(index_dtype, INFINI_DTYPE_I32, INFINI_DTYPE_I64);
+
+    auto result = SpMVInfo::create(y_desc, a_desc, x_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        dtype,
+        index_dtype,
+        result.take(),
+        a_desc,
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+    return INFINI_STATUS_SUCCESS;
+}
+
+template <typename Tindex>
+static infiniStatus_t calculateByIndex(
+    const SpMVInfo &info,
+    infiniopSpMatDescriptor_t a_desc,
+    void *y,
+    const void *x,
+    float alpha,
+    float beta,
+    cnrtQueue_t queue) {
+
+    cnrtDim3_t dim = {4, 1, 1};
+    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+
+    spmvCsrF32Kernel<Tindex><<<dim, type, queue>>>(
+        utils::cast<int>(info.m),
+        reinterpret_cast<const Tindex *>(a_desc->crowIndices()),
+        reinterpret_cast<const Tindex *>(a_desc->colIndices()),
+        reinterpret_cast<const float *>(a_desc->values()),
+        reinterpret_cast<const float *>(x),
+        utils::cast<int>(info.x_vector.stride),
+        reinterpret_cast<float *>(y),
+        utils::cast<int>(info.y_vector.stride),
+        alpha,
+        beta);
+
+    cnrtQueueSync(queue);
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    void *y,
+    const void *x,
+    float alpha,
+    float beta,
+    void *stream) const {
+
+    (void)workspace;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
+    if (_dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    auto queue = reinterpret_cast<cnrtQueue_t>(stream);
+    switch (_index_dtype) {
+    case INFINI_DTYPE_I32:
+        return calculateByIndex<int32_t>(_info, _a_desc, y, x, alpha, beta, queue);
+    case INFINI_DTYPE_I64:
+        return calculateByIndex<int64_t>(_info, _a_desc, y, x, alpha, beta, queue);
+    default:
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+}
+
+} // namespace op::spmv::bang
