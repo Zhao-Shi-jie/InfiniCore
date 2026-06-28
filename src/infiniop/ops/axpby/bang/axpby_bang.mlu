@@ -1,0 +1,113 @@
+#include "../../../devices/bang/common_bang.h"
+#include "axpby_bang.h"
+#include "axpby_bang_kernel.mlu"
+
+namespace op::axpby::bang {
+
+struct Descriptor::Opaque {
+    std::shared_ptr<device::bang::Handle::Internal> internal;
+};
+
+Descriptor::~Descriptor() {
+    delete _opaque;
+}
+
+infiniStatus_t Descriptor::create(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopSpVecDescriptor_t x_desc,
+    infiniopTensorDescriptor_t y_desc) {
+    auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
+    CHECK_DTYPE(x_desc->valuesDesc()->dtype(), INFINI_DTYPE_F32);
+    CHECK_DTYPE(x_desc->indicesDesc()->dtype(), INFINI_DTYPE_I32, INFINI_DTYPE_I64);
+
+    auto result = AxpbyInfo::create(x_desc, y_desc);
+    CHECK_RESULT(result);
+
+    *desc_ptr = new Descriptor(
+        result.take(),
+        x_desc,
+        0,
+        new Opaque{handle->internal()},
+        handle->device,
+        handle->device_id);
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t Descriptor::calculate(
+    void *workspace,
+    size_t workspace_size,
+    void *y,
+    float alpha,
+    float beta,
+    void *stream) const {
+    (void)workspace;
+    if (workspace_size < _workspace_size) {
+        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+    }
+    if (_info.dtype != INFINI_DTYPE_F32) {
+        return INFINI_STATUS_BAD_TENSOR_DTYPE;
+    }
+
+    auto queue = reinterpret_cast<cnrtQueue_t>(stream);
+    cnrtDim3_t dim = {
+        utils::cast<unsigned int>(_opaque->internal->getCorePerCluster()),
+        utils::cast<unsigned int>(_opaque->internal->getClusterCount()),
+        1};
+    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+
+    int n = utils::cast<int>(_info.n);
+    int nnz = utils::cast<int>(_info.nnz);
+    int incy = utils::cast<int>(_info.incy);
+    auto y_data = reinterpret_cast<float *>(y);
+
+    if (beta != 1.0f) {
+        if (incy == 1) {
+            if (beta == 0.0f) {
+                axpbyZeroF32ContiguousKernel<<<dim, type, queue>>>(
+                    n,
+                    y_data);
+            } else {
+                axpbyScaleF32ContiguousKernel<<<dim, type, queue>>>(
+                    n,
+                    y_data,
+                    beta);
+            }
+        } else {
+            axpbyScaleF32StridedKernel<<<dim, type, queue>>>(
+                n,
+                incy,
+                y_data,
+                beta);
+        }
+    }
+
+    if (alpha != 0.0f && nnz > 0) {
+        switch (_x_desc->indicesDesc()->dtype()) {
+        case INFINI_DTYPE_I32:
+            axpbyAddF32Kernel<int32_t><<<dim, type, queue>>>(
+                nnz,
+                reinterpret_cast<const int32_t *>(_x_desc->indices()),
+                reinterpret_cast<const float *>(_x_desc->values()),
+                y_data,
+                incy,
+                alpha);
+            break;
+        case INFINI_DTYPE_I64:
+            axpbyAddF32Kernel<int64_t><<<dim, type, queue>>>(
+                nnz,
+                reinterpret_cast<const int64_t *>(_x_desc->indices()),
+                reinterpret_cast<const float *>(_x_desc->values()),
+                y_data,
+                incy,
+                alpha);
+            break;
+        default:
+            return INFINI_STATUS_BAD_TENSOR_DTYPE;
+        }
+    }
+    cnrtQueueSync(queue);
+    return INFINI_STATUS_SUCCESS;
+}
+
+} // namespace op::axpby::bang
