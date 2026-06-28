@@ -1,0 +1,17 @@
+#include "../../../devices/bang/common_bang.h"
+
+template <typename Tindex>
+__mlu_global__ void spvvF32Kernel(
+    int nnz,
+    const Tindex *indices,
+    const float *values,
+    const float *x,
+    int x_stride,
+    float *y) {
+    float acc = 0.0f;
+    for (int i = 0; i < nnz; ++i) {
+        int index = static_cast<int>(indices[i]);
+        acc += values[i] * x[index * x_stride];
+    }
+    y[0] = acc;
+}
