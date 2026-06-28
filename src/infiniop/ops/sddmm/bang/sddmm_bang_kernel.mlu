@@ -1,0 +1,157 @@
+#include "../../../devices/bang/common_bang.h"
+
+__nram__ char sddmm_nram_buffer[NRAM_MAX_SIZE];
+
+template <typename Tindex>
+__mlu_global__ void sddmmCsrF32ReuseAFullKKernel(
+    int rows,
+    int k_dim,
+    const Tindex *crow,
+    const Tindex *col,
+    const float *a,
+    int a_row_stride,
+    const float *b,
+    int b_row_stride,
+    int b_col_stride,
+    float *c,
+    float alpha,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)sddmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_a = (float *)nram_aligned;
+
+    int aligned_k = ((k_dim * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+    float *nram_b = nram_a + aligned_k;
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        Tindex ptr_begin = crow[row];
+        Tindex ptr_end = crow[row + 1];
+        if (ptr_begin == ptr_end) {
+            continue;
+        }
+
+        if (aligned_k != k_dim) {
+            __bang_write_value(nram_a, aligned_k, 0.0f);
+        }
+        __memcpy(nram_a, a + row * a_row_stride, k_dim * sizeof(float), GDRAM2NRAM);
+
+        for (Tindex ptr = ptr_begin; ptr < ptr_end; ++ptr) {
+            int c_col = static_cast<int>(col[ptr]);
+            if (aligned_k != k_dim) {
+                __bang_write_value(nram_b, aligned_k, 0.0f);
+            }
+            if (b_row_stride == 1) {
+                __memcpy(nram_b, b + c_col * b_col_stride, k_dim * sizeof(float), GDRAM2NRAM);
+            } else {
+                __memcpy(nram_b,
+                         b + c_col * b_col_stride,
+                         sizeof(float),
+                         GDRAM2NRAM,
+                         sizeof(float),
+                         b_row_stride * sizeof(float),
+                         k_dim - 1);
+            }
+            __bang_mul(nram_b, nram_a, nram_b, aligned_k);
+            float acc = __bang_sum(nram_b, aligned_k);
+            c[ptr] = alpha * acc + beta * c[ptr];
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void sddmmCsrF32VectorKernel(
+    int rows,
+    int k_dim,
+    int chunk_size,
+    const Tindex *crow,
+    const Tindex *col,
+    const float *a,
+    int a_row_stride,
+    const float *b,
+    int b_row_stride,
+    int b_col_stride,
+    float *c,
+    float alpha,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)sddmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_a = (float *)nram_aligned;
+    float *nram_b = nram_a + chunk_size;
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        for (Tindex ptr = crow[row]; ptr < crow[row + 1]; ++ptr) {
+            int c_col = static_cast<int>(col[ptr]);
+            float acc = 0.0f;
+            for (int k = 0; k < k_dim; k += chunk_size) {
+                int curr_k = k_dim - k;
+                if (curr_k > chunk_size) {
+                    curr_k = chunk_size;
+                }
+                int aligned_k = ((curr_k * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+
+                if (aligned_k != curr_k) {
+                    __bang_write_value(nram_a, aligned_k, 0.0f);
+                    __bang_write_value(nram_b, aligned_k, 0.0f);
+                }
+                __memcpy(nram_a, a + row * a_row_stride + k, curr_k * sizeof(float), GDRAM2NRAM);
+                if (b_row_stride == 1) {
+                    __memcpy(nram_b, b + k + c_col * b_col_stride, curr_k * sizeof(float), GDRAM2NRAM);
+                } else {
+                    __memcpy(nram_b,
+                             b + k * b_row_stride + c_col * b_col_stride,
+                             sizeof(float),
+                             GDRAM2NRAM,
+                             sizeof(float),
+                             b_row_stride * sizeof(float),
+                             curr_k - 1);
+                }
+                __bang_mul(nram_b, nram_a, nram_b, aligned_k);
+                acc += __bang_sum(nram_b, aligned_k);
+            }
+            c[ptr] = alpha * acc + beta * c[ptr];
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void sddmmCsrF32StridedKernel(
+    int rows,
+    int k_dim,
+    const Tindex *crow,
+    const Tindex *col,
+    const float *a,
+    int a_row_stride,
+    int a_col_stride,
+    const float *b,
+    int b_row_stride,
+    int b_col_stride,
+    float *c,
+    float alpha,
+    float beta) {
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        for (Tindex ptr = crow[row]; ptr < crow[row + 1]; ++ptr) {
+            int c_col = static_cast<int>(col[ptr]);
+            float acc = 0.0f;
+            for (int k = 0; k < k_dim; ++k) {
+                acc += a[row * a_row_stride + k * a_col_stride]
+                     * b[k * b_row_stride + c_col * b_col_stride];
+            }
+            c[ptr] = alpha * acc + beta * c[ptr];
+        }
+    }
+}
+
+__mlu_global__ void sddmmCsrF32ScaleCKernel(
+    int nnz,
+    float *c,
+    float beta) {
+
+    for (int ptr = taskId; ptr < nnz; ptr += taskDim) {
+        if (beta == 0.0f) {
+            c[ptr] = 0.0f;
+        } else {
+            c[ptr] *= beta;
+        }
+    }
+}
