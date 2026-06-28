@@ -5,6 +5,7 @@
 #include "../pool.h"
 #include "nvidia_handle.h"
 #include <cublas_v2.h>
+#include <cusparse.h>
 #include <functional>
 
 #ifdef ENABLE_CUDNN_API
@@ -12,12 +13,14 @@
 #endif
 
 #define CHECK_CUBLAS(API) CHECK_INTERNAL(API, CUBLAS_STATUS_SUCCESS)
+#define CHECK_CUSPARSE(API) CHECK_INTERNAL(API, CUSPARSE_STATUS_SUCCESS)
 #define CHECK_CUDNN(API) CHECK_INTERNAL(API, CUDNN_STATUS_SUCCESS)
 
 namespace device::nvidia {
 
 class Handle::Internal {
     Pool<cublasHandle_t> blas_handles;
+    Pool<cusparseHandle_t> sparse_handles;
 #ifdef ENABLE_CUDNN_API
     Pool<cudnnHandle_t> dnn_handles;
 #endif
@@ -34,6 +37,7 @@ public:
     Internal(int);
 
     infiniStatus_t useCublas(cudaStream_t stream, const Fn<cublasHandle_t> &f) const;
+    infiniStatus_t useCusparse(cudaStream_t stream, const Fn<cusparseHandle_t> &f) const;
 #ifdef ENABLE_CUDNN_API
     infiniStatus_t useCudnn(cudaStream_t stream, const Fn<cudnnHandle_t> &f) const;
 #endif

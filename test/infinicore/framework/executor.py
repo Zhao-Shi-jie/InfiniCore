@@ -77,7 +77,19 @@ class TestExecutor:
             raise ImportError(f"Could not load spec from {path}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        module_dir = str(path.parent)
+        inserted_module_dir = False
+        if module_dir not in sys.path:
+            sys.path.insert(0, module_dir)
+            inserted_module_dir = True
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if inserted_module_dir:
+                try:
+                    sys.path.remove(module_dir)
+                except ValueError:
+                    pass
         return module
 
     def _find_test_class(self, module):

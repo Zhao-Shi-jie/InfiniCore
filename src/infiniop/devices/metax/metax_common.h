@@ -8,21 +8,25 @@
 #include <mcblas/mcblas.h>
 #include <mcdnn/mcdnn.h>
 #include <mcr/mc_runtime.h>
+#include <mcsparse/mcsparse.h>
 #else
 #include <hcblas/hcblas.h>
 #include <hcdnn/hcdnn.h>
 #include <hcr/hc_runtime.h>
+#include <hcsparse/hcsparse.h>
 #endif
 #include <functional>
 #include <memory>
 
 #define CHECK_MCBLAS(API) CHECK_INTERNAL(API, HCBLAS_STATUS_SUCCESS)
 #define CHECK_MCDNN(API) CHECK_INTERNAL(API, HCDNN_STATUS_SUCCESS)
+#define CHECK_MCSPARSE(API) CHECK_INTERNAL(API, HCSPARSE_STATUS_SUCCESS)
 
 namespace device::metax {
 
 class Handle::Internal {
     Pool<hcblasHandle_t> mcblas_handles;
+    Pool<hcsparseHandle_t> mcsparse_handles;
     Pool<hcdnnHandle_t> mcdnn_handles;
 
     template <typename T>
@@ -36,6 +40,7 @@ class Handle::Internal {
 public:
     Internal(int);
     infiniStatus_t useMcblas(hcStream_t stream, const Fn<hcblasHandle_t> &f) const;
+    infiniStatus_t useMcsparse(hcStream_t stream, const Fn<hcsparseHandle_t> &f) const;
     infiniStatus_t useMcdnn(hcStream_t stream, const Fn<hcdnnHandle_t> &f) const;
 
     int warpSize() const;

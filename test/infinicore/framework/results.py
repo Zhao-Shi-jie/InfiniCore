@@ -1,3 +1,5 @@
+import hashlib
+import json
 from typing import List, Dict, Any
 from dataclasses import dataclass, is_dataclass, field
 from .devices import InfiniDeviceEnum
@@ -78,6 +80,8 @@ class TestSummary:
         self.verbose = verbose
         self.bench_mode = bench_mode
         self.report_entries = []  # Cache for JSON report
+        self.max_report_sequence_items = 64
+        self.report_sequence_sample_items = 8
 
     # =========================================================
     #  Part 1: Result Aggregation
@@ -334,7 +338,7 @@ class TestSummary:
                 elif isinstance(v, TensorSpec):
                     display_kwargs[k] = process_spec(v, v.name)
                 else:
-                    display_kwargs[k] = v
+                    display_kwargs[k] = self._simplify_for_report(v)
 
             # --- E. Inject Outputs ---
             if getattr(tc, "output_specs", None):
@@ -373,6 +377,50 @@ class TestSummary:
             "dtype": str(s.dtype).split(".")[-1],
             "strides": list(s.strides) if s.strides else None,
         }
+
+    def _simplify_for_report(self, value):
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+
+        if isinstance(value, dict):
+            return {k: self._simplify_for_report(v) for k, v in value.items()}
+
+        if isinstance(value, (list, tuple)):
+            if len(value) <= self.max_report_sequence_items:
+                return [self._simplify_for_report(v) for v in value]
+
+            sample_count = self.report_sequence_sample_items
+            head = [self._simplify_for_report(v) for v in value[:sample_count]]
+            tail = [self._simplify_for_report(v) for v in value[-sample_count:]]
+            summary = {
+                "__summary__": f"truncated {type(value).__name__}",
+                "length": len(value),
+                "omitted": len(value) - len(head) - len(tail),
+                "head": head,
+                "tail": tail,
+            }
+
+            if all(isinstance(v, (int, float)) for v in value):
+                summary["min"] = min(value)
+                summary["max"] = max(value)
+
+            try:
+                payload = json.dumps(
+                    value, ensure_ascii=False, separators=(",", ":"), default=str
+                )
+                summary["sha256"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            except Exception:
+                pass
+
+            return summary
+
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return str(value)
+
+        return value
 
     def _fmt_result(self, res):
         if not (is_dataclass(res) or hasattr(res, "success")):

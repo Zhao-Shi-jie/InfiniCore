@@ -35,6 +35,17 @@ infiniStatus_t Handle::Internal::useMcblas(hcStream_t stream, const Fn<hcblasHan
     return INFINI_STATUS_SUCCESS;
 }
 
+infiniStatus_t Handle::Internal::useMcsparse(hcStream_t stream, const Fn<hcsparseHandle_t> &f) const {
+    auto handle = mcsparse_handles.pop();
+    if (!handle) {
+        CHECK_MCSPARSE(hcsparseCreate(&(*handle)));
+    }
+    CHECK_MCSPARSE(hcsparseSetStream(*handle, stream));
+    CHECK_STATUS(f(*handle));
+    mcsparse_handles.push(std::move(*handle));
+    return INFINI_STATUS_SUCCESS;
+}
+
 infiniStatus_t Handle::Internal::useMcdnn(hcStream_t stream, const Fn<hcdnnHandle_t> &f) const {
     auto handle = mcdnn_handles.pop();
     if (!handle) {
