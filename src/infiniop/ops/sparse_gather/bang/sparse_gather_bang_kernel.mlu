@@ -1,0 +1,21 @@
+#include "../../../devices/bang/common_bang.h"
+
+template <typename Tindex>
+__mlu_global__ void sparseGatherF32Kernel(
+    int nnz,
+    int input_size,
+    int input_stride,
+    int output_stride,
+    const Tindex *indices,
+    float *output,
+    const float *input) {
+    for (int i = taskId; i < nnz; i += taskDim) {
+        Tindex index = indices[i];
+        int out_offset = i * output_stride;
+        if (index >= 0 && static_cast<int>(index) < input_size) {
+            output[out_offset] = input[static_cast<int>(index) * input_stride];
+        } else {
+            output[out_offset] = 0.0f;
+        }
+    }
+}
