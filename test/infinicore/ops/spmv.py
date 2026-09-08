@@ -6,8 +6,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import infinicore
 import torch
 from framework import BaseOperatorTest, GenericTestRunner, TensorSpec, TestCase
-from framework.utils.tensor_utils import infinicore_tensor_from_torch
 from sparse_utils import infinicore_list_on_device, random_csr_indices
+
+_SPARSE_FORMATS = ["csr", "coo"]
 
 
 class SparseTestCase(TestCase):
@@ -15,6 +16,7 @@ class SparseTestCase(TestCase):
         return (
             f"TestCase({self.description} - rows={self.kwargs['rows']}; "
             f"cols={self.kwargs['cols']}; density={self.kwargs['density']:.6f}; "
+            f"format={self.kwargs['sparse_format']}; "
             f"alpha={self.kwargs['alpha']}; beta={self.kwargs['beta']})"
         )
 
@@ -47,6 +49,7 @@ class CsrSpMatSpec(TensorSpec):
         cols,
         crow,
         col,
+        sparse_format="csr",
         name="sparse",
     ):
         super().__init__(shape=(rows, cols), dtype=values_spec.dtype, name=name)
@@ -55,6 +58,7 @@ class CsrSpMatSpec(TensorSpec):
         self.cols = cols
         self.crow = crow
         self.col = col
+        self.sparse_format = sparse_format
         self._cached_values = {}
 
     def create_torch_tensor(self, device):
@@ -63,20 +67,36 @@ class CsrSpMatSpec(TensorSpec):
                 device
             ).clone()
         values = self._cached_values[device]
-        infini_values = infinicore_tensor_from_torch(values)
+        infini_values = infinicore.from_torch(values)
         infini_device = infini_values.device
-        crow_tensor = infinicore_list_on_device(
-            self.crow, dtype=infinicore.int64, device=infini_device
-        )
         col_tensor = infinicore_list_on_device(
             self.col, dtype=infinicore.int64, device=infini_device
         )
-        return infinicore.csr_spmat(
-            crow_tensor, col_tensor, infini_values, (self.rows, self.cols)
-        )
+        if self.sparse_format == "csr":
+            crow_tensor = infinicore_list_on_device(
+                self.crow, dtype=infinicore.int64, device=infini_device
+            )
+            return infinicore.csr_spmat(
+                crow_tensor, col_tensor, infini_values, (self.rows, self.cols)
+            )
+
+        if self.sparse_format == "coo":
+            row_indices = torch.tensor(
+                csr_to_coo_rows(self.rows, self.crow),
+                dtype=torch.int64,
+                device=values.device,
+            )
+            return infinicore.coo_spmat(
+                infinicore.from_torch(row_indices),
+                col_tensor,
+                infini_values,
+                (self.rows, self.cols),
+            )
+
+        raise ValueError(f"Unsupported sparse format: {self.sparse_format}")
 
     def __str__(self):
-        return f"{self.name}: spmat(rows={self.rows}, cols={self.cols})"
+        return f"{self.name}: spmat(format={self.sparse_format}, rows={self.rows}, cols={self.cols})"
 
 
 def _generate_spmv_cases():
@@ -109,6 +129,13 @@ def _use_dense_reference(device):
     return device.type == "mlu"
 
 
+def csr_to_coo_rows(rows, crow):
+    row_indices = []
+    for row in range(rows):
+        row_indices.extend([row] * (crow[row + 1] - crow[row]))
+    return row_indices
+
+
 def spmv_sparse_reference(values, x, *, rows, cols, crow, col):
     sparse = torch.sparse_csr_tensor(
         torch.tensor(crow, dtype=torch.int64, device=values.device),
@@ -139,63 +166,42 @@ def parse_test_cases():
     for rows, cols, density, crow, col, alpha, beta in _TEST_CASES_DATA:
         nnz = len(col)
         for dtype in _TENSOR_DTYPES:
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
-            # test_cases.append(
-            #     SparseTestCase(
-            #         inputs=[
-            #             values_spec,
-            #             CsrSpMatSpec(
-            #                 values_spec=values_spec,
-            #                 rows=rows,
-            #                 cols=cols,
-            #                 crow=crow,
-            #                 col=col,
-            #             ),
-            #             TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
-            #         ],
-            #         kwargs={
-            #             "rows": rows,
-            #             "cols": cols,
-            #             "crow": crow,
-            #             "col": col,
-            #         },
-            #         tolerance=_TOLERANCE_MAP[dtype],
-            #         description="SpMV - OUT_OF_PLACE",
-            #     )
-            # )
-            values_spec = CachedTensorSpec.from_tensor(
-                (nnz,), dtype=dtype, name="values"
-            )
-            test_cases.append(
-                SparseTestCase(
-                    inputs=[
-                        values_spec,
-                        CsrSpMatSpec(
-                            values_spec=values_spec,
-                            rows=rows,
-                            cols=cols,
-                            crow=crow,
-                            col=col,
-                        ),
-                        TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
-                    ],
-                    kwargs={
-                        "rows": rows,
-                        "cols": cols,
-                        "density": density,
-                        "crow": crow,
-                        "col": col,
-                        "alpha": alpha,
-                        "beta": beta,
-                        "out": TensorSpec.from_tensor((rows,), dtype=dtype, name="out"),
-                    },
-                    comparison_target="out",
-                    tolerance=_TOLERANCE_MAP[dtype],
-                    description="SpMV - OUT(out)",
+            for sparse_format in _SPARSE_FORMATS:
+                values_spec = CachedTensorSpec.from_tensor(
+                    (nnz,), dtype=dtype, name="values"
                 )
-            )
+                test_cases.append(
+                    SparseTestCase(
+                        inputs=[
+                            values_spec,
+                            CsrSpMatSpec(
+                                values_spec=values_spec,
+                                rows=rows,
+                                cols=cols,
+                                crow=crow,
+                                col=col,
+                                sparse_format=sparse_format,
+                            ),
+                            TensorSpec.from_tensor((cols,), dtype=dtype, name="x"),
+                        ],
+                        kwargs={
+                            "rows": rows,
+                            "cols": cols,
+                            "density": density,
+                            "crow": crow,
+                            "col": col,
+                            "sparse_format": sparse_format,
+                            "alpha": alpha,
+                            "beta": beta,
+                            "out": TensorSpec.from_tensor(
+                                (rows,), dtype=dtype, name="out"
+                            ),
+                        },
+                        comparison_target="out",
+                        tolerance=_TOLERANCE_MAP[dtype],
+                        description=f"SpMV {sparse_format} - OUT(out)",
+                    )
+                )
     return test_cases
 
 
@@ -207,10 +213,24 @@ class OpTest(BaseOperatorTest):
         return parse_test_cases()
 
     def torch_operator(
-        self, values, sparse, x, *, rows, cols, density, crow, col, alpha, beta, out=None
+        self,
+        values,
+        sparse,
+        x,
+        *,
+        rows,
+        cols,
+        density,
+        crow,
+        col,
+        sparse_format,
+        alpha,
+        beta,
+        out=None,
     ):
         del sparse
         del density
+        del sparse_format
         if _use_dense_reference(values.device):
             result = spmv_dense_reference(
                 values, x, rows=rows, cols=cols, crow=crow, col=col

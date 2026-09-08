@@ -30,10 +30,15 @@ class SpMMInfo {
     SpMMInfo() = default;
 
 public:
+    infiniopSpMatFormat_t format;
     size_t m;
     size_t n;
     size_t k;
     size_t nnz;
+    size_t ell_width;
+    size_t slice_height;
+    size_t sigma;
+    size_t num_slices;
     DenseMatrix b_matrix;
     DenseMatrix c_matrix;
 
@@ -43,7 +48,6 @@ public:
         infiniopTensorDescriptor_t b_desc) {
 
         CHECK_OR_RETURN(a_desc != nullptr, INFINI_STATUS_NULL_POINTER);
-        CHECK_OR_RETURN(a_desc->format() == INFINIOP_SPMAT_FORMAT_CSR, INFINI_STATUS_BAD_PARAM);
 
         auto b_matrix = DenseMatrix::create(b_desc);
         CHECK_RESULT(b_matrix);
@@ -59,10 +63,15 @@ public:
         CHECK_OR_RETURN(b_desc->dtype() == dtype && a_desc->valuesDesc()->dtype() == dtype, INFINI_STATUS_BAD_TENSOR_DTYPE);
 
         return utils::Result<SpMMInfo>(SpMMInfo{
+            a_desc->format(),
             a_desc->rows(),
             b_matrix->cols,
             a_desc->cols(),
             a_desc->nnz(),
+            a_desc->ellWidth(),
+            a_desc->sliceHeight(),
+            a_desc->sigma(),
+            a_desc->numSlices(),
             b_matrix.take(),
             c_matrix.take()});
     }

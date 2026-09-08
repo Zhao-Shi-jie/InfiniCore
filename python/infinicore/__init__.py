@@ -158,7 +158,14 @@ from infinicore.tensor import (
     strided_from_blob,
     zeros,
 )
-from infinicore.spmat import SpMat, csr_spmat
+from infinicore.spmat import (
+    SpMat,
+    coo_spmat,
+    csr_spmat,
+    ell_spmat,
+    sell_sigma_c_spmat,
+    sell_spmat,
+)
 from infinicore.spvec import SpVec, coo_spvec
 
 __all__ = [
@@ -271,7 +278,11 @@ __all__ = [
     "from_list_by_numpy",
     "from_numpy",
     "from_torch",
+    "coo_spmat",
     "csr_spmat",
+    "ell_spmat",
+    "sell_spmat",
+    "sell_sigma_c_spmat",
     "coo_spvec",
     "mha_kvcache",
     "mha_varlen",

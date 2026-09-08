@@ -78,6 +78,64 @@ def open_lib():
         ctypes.c_void_p,
     ]
     lib.infiniopCreateCsrSpMatDescriptor.restype = c_int
+    lib.infiniopCreateCooSpMatDescriptor.argtypes = [
+        POINTER(infiniopSpMatDescriptor_t),
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.infiniopCreateCooSpMatDescriptor.restype = c_int
+    lib.infiniopCreateEllSpMatDescriptor.argtypes = [
+        POINTER(infiniopSpMatDescriptor_t),
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.infiniopCreateEllSpMatDescriptor.restype = c_int
+    lib.infiniopCreateSellSpMatDescriptor.argtypes = [
+        POINTER(infiniopSpMatDescriptor_t),
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.infiniopCreateSellSpMatDescriptor.restype = c_int
+    lib.infiniopCreateSellSigmaCSpMatDescriptor.argtypes = [
+        POINTER(infiniopSpMatDescriptor_t),
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        c_uint64,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.infiniopCreateSellSigmaCSpMatDescriptor.restype = c_int
     lib.infiniopDestroySpMatDescriptor.argtypes = [infiniopSpMatDescriptor_t]
     lib.infiniopDestroySpMatDescriptor.restype = c_int
     lib.infiniopCreateSpVecDescriptor.argtypes = [

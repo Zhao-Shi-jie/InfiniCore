@@ -7,7 +7,9 @@ INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(SpMV);
 
 SpMV::SpMV(Tensor y, const SpMat &a, const Tensor &x, float alpha, float beta) {
     INFINICORE_ASSERT(a);
-    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(y, a->values(), a->crow_indices(), a->col_indices(), x);
+    INFINICORE_ASSERT(a->format() == INFINIOP_SPMAT_FORMAT_CSR || a->format() == INFINIOP_SPMAT_FORMAT_COO);
+    INFINICORE_ASSERT(y->device() == a->device());
+    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(y, x);
     INFINICORE_GRAPH_OP_DISPATCH(y->device().getType(), y, a, x, alpha, beta);
 }
 

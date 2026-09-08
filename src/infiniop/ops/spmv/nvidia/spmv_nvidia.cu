@@ -73,7 +73,8 @@ infiniStatus_t Descriptor::create(
     (void)x;
     auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
     auto dtype = y_desc->dtype();
-    auto index_dtype = a_desc->crowIndicesDesc()->dtype();
+    CHECK_OR_RETURN(a_desc->format() == INFINIOP_SPMAT_FORMAT_CSR, INFINI_STATUS_BAD_PARAM);
+    auto index_dtype = a_desc->indexDtype();
 
     CHECK_DTYPE(dtype, INFINI_DTYPE_F16, INFINI_DTYPE_F32, INFINI_DTYPE_BF16);
 

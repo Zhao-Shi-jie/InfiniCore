@@ -18,51 +18,176 @@ __mlu_global__ void spmmCsrF32ContiguousKernel(
     float beta) {
 
     char *nram_aligned = (char *)(((size_t)spmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
-    float *nram_acc = (float *)nram_aligned;
-    float *nram_b = nram_acc + col_block;
+    float *nram_acc_ping = (float *)nram_aligned;
+    float *nram_acc_pong = nram_acc_ping + col_block;
+    float *nram_b_ping = nram_acc_pong + col_block;
+    float *nram_b_pong = nram_b_ping + col_block;
 
     int col_tiles = (cols + col_block - 1) / col_block;
     int total_tiles = rows * col_tiles;
 
-    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
-        int row = tile / col_tiles;
-        int col_begin = (tile - row * col_tiles) * col_block;
-        int curr_cols = cols - col_begin;
-        if (curr_cols > col_block) {
-            curr_cols = col_block;
+    int tile = taskId;
+    if (tile >= total_tiles) {
+        return;
+    }
+
+    bool output_store_pending = false;
+    int acc_index = 0;
+    float *nram_acc_current = nram_acc_ping;
+
+    int row = tile / col_tiles;
+    int col_begin = (tile - row * col_tiles) * col_block;
+    int curr_cols = cols - col_begin;
+    if (curr_cols > col_block) {
+        curr_cols = col_block;
+    }
+    int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+    Tindex ptr_begin = crow_indices[row];
+    Tindex ptr_end = crow_indices[row + 1];
+    float first_value = 0.0f;
+    int second_k = 0;
+
+    __bang_write_value(nram_acc_current, aligned_cols, 0.0f);
+    if (aligned_cols != curr_cols) {
+        __bang_write_value(nram_b_ping, aligned_cols, 0.0f);
+        __bang_write_value(nram_b_pong, aligned_cols, 0.0f);
+    }
+    __sync_compute();
+
+    if (ptr_begin < ptr_end) {
+        int first_k = static_cast<int>(col_indices[ptr_begin]);
+        first_value = values[ptr_begin];
+        if (ptr_begin + 1 < ptr_end) {
+            second_k = static_cast<int>(col_indices[ptr_begin + 1]);
         }
-        int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+        __memcpy_async(
+            nram_b_ping,
+            b + first_k * b_row_stride + col_begin,
+            curr_cols * sizeof(float),
+            GDRAM2NRAM);
+        __sync_io();
+    }
 
-        __bang_write_value(nram_acc, aligned_cols, 0.0f);
+    while (true) {
+        if (ptr_begin < ptr_end) {
+            // Inner pipeline: load B[ptr + 1] while Compute consumes B[ptr].
+            int current_buffer = 0;
+            for (Tindex ptr = ptr_begin; ptr < ptr_end; ++ptr) {
+                if (ptr != ptr_begin) {
+                    __sync_io();
+                    output_store_pending = false;
+                }
 
-        Tindex ptr_begin = crow_indices[row];
-        Tindex ptr_end = crow_indices[row + 1];
-        for (Tindex ptr = ptr_begin; ptr < ptr_end; ++ptr) {
-            int k = static_cast<int>(col_indices[ptr]);
-            if (aligned_cols != curr_cols) {
-                __bang_write_value(nram_b, aligned_cols, 0.0f);
+                float *nram_b_current = current_buffer == 0 ? nram_b_ping : nram_b_pong;
+                float *nram_b_next = current_buffer == 0 ? nram_b_pong : nram_b_ping;
+                float current_value = ptr == ptr_begin ? first_value : values[ptr];
+                if (ptr + 1 < ptr_end) {
+                    int next_k = ptr == ptr_begin ? second_k : static_cast<int>(col_indices[ptr + 1]);
+                    __sync_compute();
+                    __memcpy_async(
+                        nram_b_next,
+                        b + next_k * b_row_stride + col_begin,
+                        curr_cols * sizeof(float),
+                        GDRAM2NRAM);
+                }
+
+                __bang_mul_scalar(nram_b_current, nram_b_current, current_value, aligned_cols);
+                __bang_add(nram_acc_current, nram_acc_current, nram_b_current, aligned_cols);
+                current_buffer ^= 1;
             }
-            __memcpy(nram_b, b + k * b_row_stride + col_begin, curr_cols * sizeof(float), GDRAM2NRAM);
-            __bang_mul_scalar(nram_b, nram_b, values[ptr], aligned_cols);
-            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+            __sync_compute();
         }
 
         int c_offset = row * c_row_stride + col_begin;
+        if (beta != 0.0f) {
+            __memcpy_async(nram_b_ping, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
+        }
         if (alpha != 1.0f) {
-            __bang_mul_scalar(nram_acc, nram_acc, alpha, aligned_cols);
+            __bang_mul_scalar(nram_acc_current, nram_acc_current, alpha, aligned_cols);
         }
-        if (beta == 0.0f) {
-            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
-        } else {
-            if (aligned_cols != curr_cols) {
-                __bang_write_value(nram_b, aligned_cols, 0.0f);
+        if (beta != 0.0f) {
+            __sync_io();
+            output_store_pending = false;
+            __bang_mul_scalar(nram_b_ping, nram_b_ping, beta, aligned_cols);
+            __bang_add(nram_acc_current, nram_acc_current, nram_b_ping, aligned_cols);
+        }
+        __sync_compute();
+
+        int next_tile = tile + taskDim;
+        bool has_next_tile = next_tile < total_tiles;
+        int next_acc_index = acc_index ^ 1;
+        float *nram_acc_next = next_acc_index == 0 ? nram_acc_ping : nram_acc_pong;
+        int next_row = 0;
+        int next_col_begin = 0;
+        int next_curr_cols = 0;
+        int next_aligned_cols = 0;
+        Tindex next_ptr_begin = 0;
+        Tindex next_ptr_end = 0;
+        float next_first_value = 0.0f;
+        int next_second_k = 0;
+
+        if (has_next_tile) {
+            if (output_store_pending) {
+                __sync_io();
+                output_store_pending = false;
             }
-            __memcpy(nram_b, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
-            __bang_mul_scalar(nram_b, nram_b, beta, aligned_cols);
-            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
-            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+
+            next_row = next_tile / col_tiles;
+            next_col_begin = (next_tile - next_row * col_tiles) * col_block;
+            next_curr_cols = cols - next_col_begin;
+            if (next_curr_cols > col_block) {
+                next_curr_cols = col_block;
+            }
+            next_aligned_cols = ((next_curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+            next_ptr_begin = crow_indices[next_row];
+            next_ptr_end = crow_indices[next_row + 1];
+
+            __bang_write_value(nram_acc_next, next_aligned_cols, 0.0f);
+            if (next_aligned_cols != next_curr_cols) {
+                __bang_write_value(nram_b_ping, next_aligned_cols, 0.0f);
+                __bang_write_value(nram_b_pong, next_aligned_cols, 0.0f);
+            }
+            __sync_compute();
+
+            if (next_ptr_begin < next_ptr_end) {
+                // Prime metadata and B before Store so the next tile can compute immediately.
+                int next_first_k = static_cast<int>(col_indices[next_ptr_begin]);
+                next_first_value = values[next_ptr_begin];
+                if (next_ptr_begin + 1 < next_ptr_end) {
+                    next_second_k = static_cast<int>(col_indices[next_ptr_begin + 1]);
+                }
+                __memcpy_async(
+                    nram_b_ping,
+                    b + next_first_k * b_row_stride + next_col_begin,
+                    next_curr_cols * sizeof(float),
+                    GDRAM2NRAM);
+                __sync_io();
+                output_store_pending = false;
+            }
         }
+
+        // Outer pipeline: the next tile is ready before this tile starts its Store.
+        __memcpy_async(c + c_offset, nram_acc_current, curr_cols * sizeof(float), NRAM2GDRAM);
+        output_store_pending = true;
+
+        if (!has_next_tile) {
+            break;
+        }
+
+        tile = next_tile;
+        acc_index = next_acc_index;
+        nram_acc_current = nram_acc_next;
+        row = next_row;
+        col_begin = next_col_begin;
+        curr_cols = next_curr_cols;
+        aligned_cols = next_aligned_cols;
+        ptr_begin = next_ptr_begin;
+        ptr_end = next_ptr_end;
+        first_value = next_first_value;
+        second_k = next_second_k;
     }
+
+    __sync_io();
 }
 
 template <typename Tindex>
@@ -118,6 +243,316 @@ __mlu_global__ void spmmCsrF32SpmvKernel(
         for (Tindex ptr = crow_indices[row]; ptr < crow_indices[row + 1]; ++ptr) {
             int k = static_cast<int>(col_indices[ptr]);
             acc += values[ptr] * b[k * b_row_stride];
+        }
+
+        int c_offset = row * c_row_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmmEllF32ContiguousKernel(
+    int rows,
+    int cols,
+    int ell_width,
+    const Tindex *col_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    int col_block,
+    float alpha,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)spmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_acc = (float *)nram_aligned;
+    float *nram_b = nram_acc + col_block;
+
+    int col_tiles = (cols + col_block - 1) / col_block;
+    int total_tiles = rows * col_tiles;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        int row = tile / col_tiles;
+        int col_begin = (tile - row * col_tiles) * col_block;
+        int curr_cols = cols - col_begin;
+        if (curr_cols > col_block) {
+            curr_cols = col_block;
+        }
+        int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+
+        __bang_write_value(nram_acc, aligned_cols, 0.0f);
+
+        int row_offset = row * ell_width;
+        for (int slot = 0; slot < ell_width; ++slot) {
+            int ptr = row_offset + slot;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, b + k * b_row_stride + col_begin, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, value, aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+        }
+
+        int c_offset = row * c_row_stride + col_begin;
+        if (alpha != 1.0f) {
+            __bang_mul_scalar(nram_acc, nram_acc, alpha, aligned_cols);
+        }
+        if (beta == 0.0f) {
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        } else {
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, beta, aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmmEllF32StridedKernel(
+    int rows,
+    int cols,
+    int ell_width,
+    const Tindex *col_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    int b_col_stride,
+    float *c,
+    int c_row_stride,
+    int c_col_stride,
+    float alpha,
+    float beta) {
+
+    int total = rows * cols;
+    for (int index = taskId; index < total; index += taskDim) {
+        int row = index / cols;
+        int col = index - row * cols;
+        float acc = 0.0f;
+        int row_offset = row * ell_width;
+        for (int slot = 0; slot < ell_width; ++slot) {
+            int ptr = row_offset + slot;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += value * b[k * b_row_stride + col * b_col_stride];
+        }
+
+        int c_offset = row * c_row_stride + col * c_col_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmmEllF32SpmvKernel(
+    int rows,
+    int ell_width,
+    const Tindex *col_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    float alpha,
+    float beta) {
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        float acc = 0.0f;
+        int row_offset = row * ell_width;
+        for (int slot = 0; slot < ell_width; ++slot) {
+            int ptr = row_offset + slot;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += value * b[k * b_row_stride];
+        }
+
+        int c_offset = row * c_row_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+template <typename Tindex, bool HAS_ROW_PERMUTATION>
+__mlu_global__ void spmmSellF32ContiguousKernel(
+    int rows,
+    int cols,
+    int slice_height,
+    const Tindex *slice_offsets,
+    const Tindex *col_indices,
+    const Tindex *row_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    int col_block,
+    float alpha,
+    float beta) {
+
+    char *nram_aligned = (char *)(((size_t)spmm_nram_buffer + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1));
+    float *nram_acc = (float *)nram_aligned;
+    float *nram_b = nram_acc + col_block;
+
+    int col_tiles = (cols + col_block - 1) / col_block;
+    int total_tiles = rows * col_tiles;
+
+    for (int tile = taskId; tile < total_tiles; tile += taskDim) {
+        int storage_row = tile / col_tiles;
+        int col_begin = (tile - storage_row * col_tiles) * col_block;
+        int curr_cols = cols - col_begin;
+        if (curr_cols > col_block) {
+            curr_cols = col_block;
+        }
+        int aligned_cols = ((curr_cols * sizeof(float) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE / sizeof(float);
+
+        int slice = storage_row / slice_height;
+        int row_in_slice = storage_row - slice * slice_height;
+        int slice_begin = static_cast<int>(slice_offsets[slice]);
+        int slice_end = static_cast<int>(slice_offsets[slice + 1]);
+        int slice_width = (slice_end - slice_begin) / slice_height;
+        int row = HAS_ROW_PERMUTATION ? static_cast<int>(row_indices[storage_row]) : storage_row;
+
+        __bang_write_value(nram_acc, aligned_cols, 0.0f);
+
+        for (int slot = 0; slot < slice_width; ++slot) {
+            int ptr = slice_begin + slot * slice_height + row_in_slice;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, b + k * b_row_stride + col_begin, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, value, aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+        }
+
+        int c_offset = row * c_row_stride + col_begin;
+        if (alpha != 1.0f) {
+            __bang_mul_scalar(nram_acc, nram_acc, alpha, aligned_cols);
+        }
+        if (beta == 0.0f) {
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        } else {
+            if (aligned_cols != curr_cols) {
+                __bang_write_value(nram_b, aligned_cols, 0.0f);
+            }
+            __memcpy(nram_b, c + c_offset, curr_cols * sizeof(float), GDRAM2NRAM);
+            __bang_mul_scalar(nram_b, nram_b, beta, aligned_cols);
+            __bang_add(nram_acc, nram_acc, nram_b, aligned_cols);
+            __memcpy(c + c_offset, nram_acc, curr_cols * sizeof(float), NRAM2GDRAM);
+        }
+    }
+}
+
+template <typename Tindex, bool HAS_ROW_PERMUTATION>
+__mlu_global__ void spmmSellF32StridedKernel(
+    int rows,
+    int cols,
+    int slice_height,
+    const Tindex *slice_offsets,
+    const Tindex *col_indices,
+    const Tindex *row_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    int b_col_stride,
+    float *c,
+    int c_row_stride,
+    int c_col_stride,
+    float alpha,
+    float beta) {
+
+    int total = rows * cols;
+    for (int index = taskId; index < total; index += taskDim) {
+        int storage_row = index / cols;
+        int col = index - storage_row * cols;
+        int slice = storage_row / slice_height;
+        int row_in_slice = storage_row - slice * slice_height;
+        int slice_begin = static_cast<int>(slice_offsets[slice]);
+        int slice_end = static_cast<int>(slice_offsets[slice + 1]);
+        int slice_width = (slice_end - slice_begin) / slice_height;
+        int row = HAS_ROW_PERMUTATION ? static_cast<int>(row_indices[storage_row]) : storage_row;
+
+        float acc = 0.0f;
+        for (int slot = 0; slot < slice_width; ++slot) {
+            int ptr = slice_begin + slot * slice_height + row_in_slice;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += value * b[k * b_row_stride + col * b_col_stride];
+        }
+
+        int c_offset = row * c_row_stride + col * c_col_stride;
+        if (beta == 0.0f) {
+            c[c_offset] = alpha * acc;
+        } else {
+            c[c_offset] = alpha * acc + beta * c[c_offset];
+        }
+    }
+}
+
+template <typename Tindex, bool HAS_ROW_PERMUTATION>
+__mlu_global__ void spmmSellF32SpmvKernel(
+    int rows,
+    int slice_height,
+    const Tindex *slice_offsets,
+    const Tindex *col_indices,
+    const Tindex *row_indices,
+    const float *values,
+    const float *b,
+    int b_row_stride,
+    float *c,
+    int c_row_stride,
+    float alpha,
+    float beta) {
+
+    for (int storage_row = taskId; storage_row < rows; storage_row += taskDim) {
+        int slice = storage_row / slice_height;
+        int row_in_slice = storage_row - slice * slice_height;
+        int slice_begin = static_cast<int>(slice_offsets[slice]);
+        int slice_end = static_cast<int>(slice_offsets[slice + 1]);
+        int slice_width = (slice_end - slice_begin) / slice_height;
+        int row = HAS_ROW_PERMUTATION ? static_cast<int>(row_indices[storage_row]) : storage_row;
+
+        float acc = 0.0f;
+        for (int slot = 0; slot < slice_width; ++slot) {
+            int ptr = slice_begin + slot * slice_height + row_in_slice;
+            float value = values[ptr];
+            if (value == 0.0f) {
+                continue;
+            }
+            int k = static_cast<int>(col_indices[ptr]);
+            acc += value * b[k * b_row_stride];
         }
 
         int c_offset = row * c_row_stride;

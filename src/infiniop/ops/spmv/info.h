@@ -26,6 +26,7 @@ class SpMVInfo {
     SpMVInfo() = default;
 
 public:
+    infiniopSpMatFormat_t format;
     size_t m;
     size_t k;
     size_t nnz;
@@ -38,7 +39,10 @@ public:
         infiniopTensorDescriptor_t x_desc) {
 
         CHECK_OR_RETURN(a_desc != nullptr, INFINI_STATUS_NULL_POINTER);
-        CHECK_OR_RETURN(a_desc->format() == INFINIOP_SPMAT_FORMAT_CSR, INFINI_STATUS_BAD_PARAM);
+        CHECK_OR_RETURN(
+            a_desc->format() == INFINIOP_SPMAT_FORMAT_CSR
+                || a_desc->format() == INFINIOP_SPMAT_FORMAT_COO,
+            INFINI_STATUS_BAD_PARAM);
 
         auto x_vector = DenseVector::create(x_desc);
         CHECK_RESULT(x_vector);
@@ -53,6 +57,7 @@ public:
         CHECK_OR_RETURN(x_desc->dtype() == dtype && a_desc->valuesDesc()->dtype() == dtype, INFINI_STATUS_BAD_TENSOR_DTYPE);
 
         return utils::Result<SpMVInfo>(SpMVInfo{
+            a_desc->format(),
             a_desc->rows(),
             a_desc->cols(),
             a_desc->nnz(),

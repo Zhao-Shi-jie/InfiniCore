@@ -25,7 +25,7 @@ infiniStatus_t Descriptor::create(
 
     *desc_ptr = new Descriptor(
         dtype,
-        a_desc->crowIndicesDesc()->dtype(),
+        a_desc->indexDtype(),
         result.take(),
         a_desc,
         0,
@@ -36,7 +36,7 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata, typename Tindex>
-void calculate(
+void calculateCsr(
     const SpMVInfo &info,
     infiniopSpMatDescriptor_t a_desc,
     void *y,
@@ -66,6 +66,40 @@ void calculate(
     }
 }
 
+template <typename Tdata, typename Tindex>
+void calculateCoo(
+    const SpMVInfo &info,
+    infiniopSpMatDescriptor_t a_desc,
+    void *y,
+    const void *x,
+    float alpha,
+    float beta) {
+    auto values = reinterpret_cast<const Tdata *>(a_desc->values());
+    auto row_indices = reinterpret_cast<const Tindex *>(a_desc->rowIndices());
+    auto col_indices = reinterpret_cast<const Tindex *>(a_desc->colIndices());
+    auto x_data = reinterpret_cast<const Tdata *>(x);
+    auto y_data = reinterpret_cast<Tdata *>(y);
+
+    for (size_t row = 0; row < info.m; ++row) {
+        auto y_offset = row * info.y_vector.stride;
+        if (beta == 0) {
+            y_data[y_offset] = utils::cast<Tdata>(0);
+        } else {
+            y_data[y_offset] = utils::cast<Tdata>(beta * utils::cast<float>(y_data[y_offset]));
+        }
+    }
+
+    for (size_t ptr = 0; ptr < info.nnz; ++ptr) {
+        auto row = static_cast<size_t>(row_indices[ptr]);
+        auto col = static_cast<size_t>(col_indices[ptr]);
+        auto y_offset = row * info.y_vector.stride;
+        auto x_offset = col * info.x_vector.stride;
+        auto acc = utils::cast<float>(y_data[y_offset])
+                 + alpha * utils::cast<float>(values[ptr]) * utils::cast<float>(x_data[x_offset]);
+        y_data[y_offset] = utils::cast<Tdata>(acc);
+    }
+}
+
 template <typename Tdata>
 infiniStatus_t calculateByIndex(
     infiniDtype_t index_dtype,
@@ -77,11 +111,27 @@ infiniStatus_t calculateByIndex(
     float beta) {
     switch (index_dtype) {
     case INFINI_DTYPE_I32:
-        calculate<Tdata, int32_t>(info, a_desc, y, x, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        switch (info.format) {
+        case INFINIOP_SPMAT_FORMAT_CSR:
+            calculateCsr<Tdata, int32_t>(info, a_desc, y, x, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_COO:
+            calculateCoo<Tdata, int32_t>(info, a_desc, y, x, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        default:
+            return INFINI_STATUS_BAD_PARAM;
+        }
     case INFINI_DTYPE_I64:
-        calculate<Tdata, int64_t>(info, a_desc, y, x, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        switch (info.format) {
+        case INFINIOP_SPMAT_FORMAT_CSR:
+            calculateCsr<Tdata, int64_t>(info, a_desc, y, x, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_COO:
+            calculateCoo<Tdata, int64_t>(info, a_desc, y, x, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        default:
+            return INFINI_STATUS_BAD_PARAM;
+        }
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }

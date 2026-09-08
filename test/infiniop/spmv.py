@@ -31,6 +31,7 @@ _TENSOR_DTYPES = [
     InfiniDtype.F32,
 ]
 _INDEX_DTYPES = [InfiniDtype.I32, InfiniDtype.I64]
+_SPARSE_FORMATS = ["csr", "coo"]
 
 _TOLERANCE_MAP = {
     InfiniDtype.F16: {"atol": 0, "rtol": 1e-2},
@@ -39,6 +40,13 @@ _TOLERANCE_MAP = {
 }
 
 DEBUG = False
+
+
+def csr_to_coo_rows(rows, crow):
+    row_indices = []
+    for row in range(rows):
+        row_indices.extend([row] * (crow[row + 1] - crow[row]))
+    return row_indices
 
 
 def test(
@@ -50,6 +58,7 @@ def test(
     cols,
     crow,
     col,
+    sparse_format="csr",
     index_dtype=InfiniDtype.I32,
     dtype=InfiniDtype.F32,
     sync=None,
@@ -57,7 +66,7 @@ def test(
     print(
         f"Testing SpMV on {InfiniDeviceNames[device]} with alpha:{alpha}, beta:{beta},"
         f" shape:({rows}, {cols}) x ({cols},), dtype:{InfiniDtypeNames[dtype]},"
-        f" index_dtype:{InfiniDtypeNames[index_dtype]}"
+        f" index_dtype:{InfiniDtypeNames[index_dtype]}, format:{sparse_format}"
     )
 
     nnz = len(col)
@@ -83,20 +92,43 @@ def test(
         sync()
 
     spmat_desc = infiniopSpMatDescriptor_t()
-    check_error(
-        LIBINFINIOP.infiniopCreateCsrSpMatDescriptor(
-            ctypes.byref(spmat_desc),
-            rows,
-            cols,
-            nnz,
-            values.descriptor,
-            crow_tensor.descriptor,
-            col_tensor.descriptor,
-            values.data(),
-            crow_tensor.data(),
-            col_tensor.data(),
+    spmat_tensors = [values, crow_tensor, col_tensor]
+    if sparse_format == "csr":
+        check_error(
+            LIBINFINIOP.infiniopCreateCsrSpMatDescriptor(
+                ctypes.byref(spmat_desc),
+                rows,
+                cols,
+                nnz,
+                values.descriptor,
+                crow_tensor.descriptor,
+                col_tensor.descriptor,
+                values.data(),
+                crow_tensor.data(),
+                col_tensor.data(),
+            )
         )
-    )
+    elif sparse_format == "coo":
+        row_tensor = TestTensor.from_torch(
+            torch.tensor(csr_to_coo_rows(rows, crow)), index_dtype, device
+        )
+        spmat_tensors.append(row_tensor)
+        check_error(
+            LIBINFINIOP.infiniopCreateCooSpMatDescriptor(
+                ctypes.byref(spmat_desc),
+                rows,
+                cols,
+                nnz,
+                values.descriptor,
+                row_tensor.descriptor,
+                col_tensor.descriptor,
+                values.data(),
+                row_tensor.data(),
+                col_tensor.data(),
+            )
+        )
+    else:
+        raise ValueError(f"Unsupported sparse format: {sparse_format}")
 
     descriptor = infiniopOperatorDescriptor_t()
     check_error(
@@ -111,7 +143,7 @@ def test(
         )
     )
 
-    for tensor in [values, crow_tensor, col_tensor, x, y]:
+    for tensor in spmat_tensors + [x, y]:
         tensor.destroy_desc()
 
     workspace_size = c_uint64(0)
@@ -150,8 +182,9 @@ if __name__ == "__main__":
 
     for device in get_test_devices(args):
         test_cases = [
-            (*case, index_dtype)
+            (*case, sparse_format, index_dtype)
             for case in _BASE_TEST_CASES
+            for sparse_format in _SPARSE_FORMATS
             for index_dtype in _INDEX_DTYPES
         ]
         test_operator(device, test, test_cases, _TENSOR_DTYPES)

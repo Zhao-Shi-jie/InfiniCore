@@ -25,7 +25,7 @@ infiniStatus_t Descriptor::create(
 
     auto handle = reinterpret_cast<device::bang::cambricon::Handle *>(handle_);
     auto dtype = y_desc->dtype();
-    auto index_dtype = a_desc->crowIndicesDesc()->dtype();
+    auto index_dtype = a_desc->indexDtype();
 
     CHECK_DTYPE(dtype, INFINI_DTYPE_F32);
     CHECK_DTYPE(index_dtype, INFINI_DTYPE_I32, INFINI_DTYPE_I64);
@@ -49,26 +49,62 @@ template <typename Tindex>
 static infiniStatus_t calculateByIndex(
     const SpMVInfo &info,
     infiniopSpMatDescriptor_t a_desc,
+    int core_per_cluster,
+    int cluster_count,
     void *y,
     const void *x,
     float alpha,
     float beta,
     cnrtQueue_t queue) {
 
-    cnrtDim3_t dim = {4, 1, 1};
-    cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+    auto x_data = reinterpret_cast<const float *>(x);
+    auto y_data = reinterpret_cast<float *>(y);
 
-    spmvCsrF32Kernel<Tindex><<<dim, type, queue>>>(
-        utils::cast<int>(info.m),
-        reinterpret_cast<const Tindex *>(a_desc->crowIndices()),
-        reinterpret_cast<const Tindex *>(a_desc->colIndices()),
-        reinterpret_cast<const float *>(a_desc->values()),
-        reinterpret_cast<const float *>(x),
-        utils::cast<int>(info.x_vector.stride),
-        reinterpret_cast<float *>(y),
-        utils::cast<int>(info.y_vector.stride),
-        alpha,
-        beta);
+    switch (info.format) {
+    case INFINIOP_SPMAT_FORMAT_CSR: {
+        cnrtDim3_t dim = {4, 1, 1};
+        cnrtFunctionType_t type = cnrtFuncTypeUnion1;
+        spmvCsrF32Kernel<Tindex><<<dim, type, queue>>>(
+            utils::cast<int>(info.m),
+            reinterpret_cast<const Tindex *>(a_desc->crowIndices()),
+            reinterpret_cast<const Tindex *>(a_desc->colIndices()),
+            reinterpret_cast<const float *>(a_desc->values()),
+            x_data,
+            utils::cast<int>(info.x_vector.stride),
+            y_data,
+            utils::cast<int>(info.y_vector.stride),
+            alpha,
+            beta);
+        break;
+    }
+    case INFINIOP_SPMAT_FORMAT_COO: {
+        cnrtDim3_t dim = {
+            utils::cast<unsigned int>(core_per_cluster),
+            utils::cast<unsigned int>(cluster_count),
+            1};
+        cnrtFunctionType_t type = cnrtFuncTypeBlock;
+        spmvF32ScaleYKernel<<<dim, type, queue>>>(
+            utils::cast<int>(info.m),
+            y_data,
+            utils::cast<int>(info.y_vector.stride),
+            beta);
+        if (alpha != 0.0f && info.nnz != 0) {
+            spmvCooF32AtomicKernel<Tindex><<<dim, type, queue>>>(
+                utils::cast<int>(info.nnz),
+                reinterpret_cast<const Tindex *>(a_desc->rowIndices()),
+                reinterpret_cast<const Tindex *>(a_desc->colIndices()),
+                reinterpret_cast<const float *>(a_desc->values()),
+                x_data,
+                utils::cast<int>(info.x_vector.stride),
+                y_data,
+                utils::cast<int>(info.y_vector.stride),
+                alpha);
+        }
+        break;
+    }
+    default:
+        return INFINI_STATUS_BAD_PARAM;
+    }
 
     cnrtQueueSync(queue);
     return INFINI_STATUS_SUCCESS;
@@ -92,11 +128,13 @@ infiniStatus_t Descriptor::calculate(
     }
 
     auto queue = reinterpret_cast<cnrtQueue_t>(stream);
+    int core_per_cluster = _opaque->internal->getCorePerCluster();
+    int cluster_count = _opaque->internal->getClusterCount();
     switch (_index_dtype) {
     case INFINI_DTYPE_I32:
-        return calculateByIndex<int32_t>(_info, _a_desc, y, x, alpha, beta, queue);
+        return calculateByIndex<int32_t>(_info, _a_desc, core_per_cluster, cluster_count, y, x, alpha, beta, queue);
     case INFINI_DTYPE_I64:
-        return calculateByIndex<int64_t>(_info, _a_desc, y, x, alpha, beta, queue);
+        return calculateByIndex<int64_t>(_info, _a_desc, core_per_cluster, cluster_count, y, x, alpha, beta, queue);
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }

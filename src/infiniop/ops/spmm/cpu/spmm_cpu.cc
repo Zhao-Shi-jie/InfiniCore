@@ -21,7 +21,7 @@ infiniStatus_t Descriptor::create(
 
     *desc_ptr = new Descriptor(
         dtype,
-        a_desc->crowIndicesDesc()->dtype(),
+        a_desc->indexDtype(),
         result.take(),
         a_desc,
         0,
@@ -32,7 +32,7 @@ infiniStatus_t Descriptor::create(
 }
 
 template <typename Tdata, typename Tindex>
-void calculate(
+void calculateCsr(
     const SpMMInfo &info,
     infiniopSpMatDescriptor_t a_desc,
     void *c,
@@ -64,6 +64,90 @@ void calculate(
     }
 }
 
+template <typename Tdata, typename Tindex>
+void calculateEll(
+    const SpMMInfo &info,
+    infiniopSpMatDescriptor_t a_desc,
+    void *c,
+    const void *b,
+    float alpha,
+    float beta) {
+    auto values = reinterpret_cast<const Tdata *>(a_desc->values());
+    auto col_indices = reinterpret_cast<const Tindex *>(a_desc->colIndices());
+    auto b_data = reinterpret_cast<const Tdata *>(b);
+    auto c_data = reinterpret_cast<Tdata *>(c);
+
+#pragma omp parallel for
+    for (ptrdiff_t row = 0; row < static_cast<ptrdiff_t>(info.m); ++row) {
+        for (size_t col = 0; col < info.n; ++col) {
+            auto c_offset = row * info.c_matrix.row_stride + col * info.c_matrix.col_stride;
+            float acc = 0;
+            for (size_t slot = 0; slot < info.ell_width; ++slot) {
+                size_t ptr = static_cast<size_t>(row) * info.ell_width + slot;
+                auto value = utils::cast<float>(values[ptr]);
+                if (value == 0.0f) {
+                    continue;
+                }
+                auto k = static_cast<size_t>(col_indices[ptr]);
+                auto b_offset = k * info.b_matrix.row_stride + col * info.b_matrix.col_stride;
+                acc += value * utils::cast<float>(b_data[b_offset]);
+            }
+            if (beta == 0) {
+                c_data[c_offset] = utils::cast<Tdata>(alpha * acc);
+            } else {
+                c_data[c_offset] = utils::cast<Tdata>(alpha * acc + beta * utils::cast<float>(c_data[c_offset]));
+            }
+        }
+    }
+}
+
+template <typename Tdata, typename Tindex>
+void calculateSell(
+    const SpMMInfo &info,
+    infiniopSpMatDescriptor_t a_desc,
+    void *c,
+    const void *b,
+    float alpha,
+    float beta) {
+    auto values = reinterpret_cast<const Tdata *>(a_desc->values());
+    auto slice_offsets = reinterpret_cast<const Tindex *>(a_desc->sliceOffsets());
+    auto col_indices = reinterpret_cast<const Tindex *>(a_desc->colIndices());
+    auto row_indices = reinterpret_cast<const Tindex *>(a_desc->rowIndices());
+    auto b_data = reinterpret_cast<const Tdata *>(b);
+    auto c_data = reinterpret_cast<Tdata *>(c);
+    bool has_row_permutation = info.format == INFINIOP_SPMAT_FORMAT_SELL_SIGMA_C;
+
+#pragma omp parallel for
+    for (ptrdiff_t storage_row = 0; storage_row < static_cast<ptrdiff_t>(info.m); ++storage_row) {
+        size_t slice = static_cast<size_t>(storage_row) / info.slice_height;
+        size_t row_in_slice = static_cast<size_t>(storage_row) - slice * info.slice_height;
+        size_t row = has_row_permutation ? static_cast<size_t>(row_indices[storage_row]) : static_cast<size_t>(storage_row);
+        size_t slice_begin = static_cast<size_t>(slice_offsets[slice]);
+        size_t slice_end = static_cast<size_t>(slice_offsets[slice + 1]);
+        size_t slice_width = (slice_end - slice_begin) / info.slice_height;
+
+        for (size_t col = 0; col < info.n; ++col) {
+            auto c_offset = row * info.c_matrix.row_stride + col * info.c_matrix.col_stride;
+            float acc = 0;
+            for (size_t slot = 0; slot < slice_width; ++slot) {
+                size_t ptr = slice_begin + slot * info.slice_height + row_in_slice;
+                auto value = utils::cast<float>(values[ptr]);
+                if (value == 0.0f) {
+                    continue;
+                }
+                auto k = static_cast<size_t>(col_indices[ptr]);
+                auto b_offset = k * info.b_matrix.row_stride + col * info.b_matrix.col_stride;
+                acc += value * utils::cast<float>(b_data[b_offset]);
+            }
+            if (beta == 0) {
+                c_data[c_offset] = utils::cast<Tdata>(alpha * acc);
+            } else {
+                c_data[c_offset] = utils::cast<Tdata>(alpha * acc + beta * utils::cast<float>(c_data[c_offset]));
+            }
+        }
+    }
+}
+
 template <typename Tdata>
 infiniStatus_t calculateByIndex(
     infiniDtype_t index_dtype,
@@ -75,11 +159,35 @@ infiniStatus_t calculateByIndex(
     float beta) {
     switch (index_dtype) {
     case INFINI_DTYPE_I32:
-        calculate<Tdata, int32_t>(info, a_desc, c, b, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        switch (info.format) {
+        case INFINIOP_SPMAT_FORMAT_CSR:
+            calculateCsr<Tdata, int32_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_ELL:
+            calculateEll<Tdata, int32_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_SELL:
+        case INFINIOP_SPMAT_FORMAT_SELL_SIGMA_C:
+            calculateSell<Tdata, int32_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        default:
+            return INFINI_STATUS_BAD_PARAM;
+        }
     case INFINI_DTYPE_I64:
-        calculate<Tdata, int64_t>(info, a_desc, c, b, alpha, beta);
-        return INFINI_STATUS_SUCCESS;
+        switch (info.format) {
+        case INFINIOP_SPMAT_FORMAT_CSR:
+            calculateCsr<Tdata, int64_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_ELL:
+            calculateEll<Tdata, int64_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        case INFINIOP_SPMAT_FORMAT_SELL:
+        case INFINIOP_SPMAT_FORMAT_SELL_SIGMA_C:
+            calculateSell<Tdata, int64_t>(info, a_desc, c, b, alpha, beta);
+            return INFINI_STATUS_SUCCESS;
+        default:
+            return INFINI_STATUS_BAD_PARAM;
+        }
     default:
         return INFINI_STATUS_BAD_TENSOR_DTYPE;
     }

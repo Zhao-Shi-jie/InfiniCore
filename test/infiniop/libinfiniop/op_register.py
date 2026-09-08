@@ -717,6 +717,8 @@ def spmm_(lib):
         c_size_t,
         c_void_p,
         c_void_p,
+        c_float,
+        c_float,
         c_void_p,
     ]
 

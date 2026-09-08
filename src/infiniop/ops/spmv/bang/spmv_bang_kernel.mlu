@@ -35,3 +35,40 @@ __mlu_global__ void spmvCsrF32Kernel(
         }
     }
 }
+
+__mlu_global__ void spmvF32ScaleYKernel(
+    int rows,
+    float *y,
+    int y_stride,
+    float beta) {
+
+    for (int row = taskId; row < rows; row += taskDim) {
+        int y_offset = row * y_stride;
+        if (beta == 0.0f) {
+            y[y_offset] = 0.0f;
+        } else {
+            y[y_offset] *= beta;
+        }
+    }
+}
+
+template <typename Tindex>
+__mlu_global__ void spmvCooF32AtomicKernel(
+    int nnz,
+    const Tindex *row_indices,
+    const Tindex *col_indices,
+    const float *values,
+    const float *x,
+    int x_stride,
+    float *y,
+    int y_stride,
+    float alpha) {
+
+    __nram__ float nram_atomic_value[1];
+    for (int ptr = taskId; ptr < nnz; ptr += taskDim) {
+        int row = static_cast<int>(row_indices[ptr]);
+        int col = static_cast<int>(col_indices[ptr]);
+        nram_atomic_value[0] = alpha * values[ptr] * x[col * x_stride];
+        __bang_atomic_add(nram_atomic_value, y + row * y_stride, nram_atomic_value, 1);
+    }
+}

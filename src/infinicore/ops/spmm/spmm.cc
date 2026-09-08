@@ -7,7 +7,8 @@ INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(SpMM);
 
 SpMM::SpMM(Tensor c, const SpMat &a, const Tensor &b, float alpha, float beta) {
     INFINICORE_ASSERT(a);
-    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(c, a->values(), a->crow_indices(), a->col_indices(), b);
+    INFINICORE_ASSERT(c->device() == a->device());
+    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(c, b);
     INFINICORE_GRAPH_OP_DISPATCH(c->device().getType(), c, a, b, alpha, beta);
 }
 
